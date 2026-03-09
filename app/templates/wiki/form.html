@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{% if page %}Edit: {{ page.title }}{% else %}New Wiki Page{% endif %}{% endblock %}
+{% block extra_head %}
+<style>
+  #preview-pane { min-height: 300px; }
+  #editor-pane textarea { font-family: monospace; font-size: 0.9rem; resize: vertical; min-height: 300px; }
+</style>
+{% endblock %}
+{% block content %}
+
+{# Breadcrumb #}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/groups">Groups</a></li>
+    <li class="breadcrumb-item"><a href="/groups/{{ group.id }}">{{ group.name }}</a></li>
+    <li class="breadcrumb-item"><a href="/groups/{{ group.id }}/wiki">Wiki</a></li>
+    {% if page %}
+    <li class="breadcrumb-item"><a href="/groups/{{ group.id }}/wiki/{{ page.slug }}">{{ page.title }}</a></li>
+    <li class="breadcrumb-item active">Edit</li>
+    {% else %}
+    <li class="breadcrumb-item active">New Page</li>
+    {% endif %}
+  </ol>
+</nav>
+
+{# Locked-by-other warning #}
+{% if locked_by_other %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-lock-fill fs-5"></i>
+  <div>
+    <strong>This page is currently locked</strong> by
+    <strong>{{ page.locked_by.username }}</strong>
+    ({{ page.lock_minutes_ago }} min ago).
+    You can view the page but cannot edit it until the lock expires or is released.
+    <div class="mt-2">
+      <a href="/groups/{{ group.id }}/wiki/{{ page.slug }}" class="btn btn-sm btn-outline-secondary">
+        Back to page
+      </a>
+      {% if is_admin %}
+      <form method="post" action="/groups/{{ group.id }}/wiki/{{ page.slug }}/force-unlock" class="d-inline ms-2">
+        <button type="submit" class="btn btn-sm btn-outline-warning">Force unlock</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% else %}
+
+<h4 class="fw-bold mb-3">{% if page %}Edit: {{ page.title }}{% else %}New Wiki Page{% endif %}</h4>
+
+<form method="post" action="{{ action }}">
+  {% if not page %}
+  <div class="mb-3">
+    <label for="title" class="form-label fw-semibold">Title</label>
+    <input type="text" class="form-control" id="title" name="title" required autofocus>
+  </div>
+  {% endif %}
+
+  {# Editor toolbar #}
+  <div class="mb-1 d-flex gap-2 align-items-center">
+    <span class="fw-semibold small">Content</span>
+    <div class="btn-group btn-group-sm ms-auto" role="group">
+      <button type="button" class="btn btn-outline-secondary active" id="btnWrite">
+        <i class="bi bi-pencil me-1"></i>Write
+      </button>
+      <button type="button" class="btn btn-outline-secondary" id="btnSplit">
+        <i class="bi bi-layout-split me-1"></i>Split
+      </button>
+      <button type="button" class="btn btn-outline-secondary" id="btnPreview">
+        <i class="bi bi-eye me-1"></i>Preview
+      </button>
+    </div>
+  </div>
+
+  <div id="editor-pane" class="mb-3">
+    <div id="editor-split" class="row g-2" style="display:none!important">
+      <div class="col-6">
+        <textarea class="form-control h-100" id="bodyMain" name="body" rows="18">{{ page.body if page else '' }}</textarea>
+      </div>
+      <div class="col-6 border rounded p-3 prose overflow-auto" id="preview-pane" style="min-height:300px"></div>
+    </div>
+    <div id="editor-write">
+      <textarea class="form-control" name="body" id="bodyWrite" rows="18">{{ page.body if page else '' }}</textarea>
+    </div>
+    <div id="editor-preview" class="border rounded p-3 prose" style="display:none;min-height:300px"></div>
+  </div>
+
+  <div class="mb-3">
+    <label for="edit_note" class="form-label fw-semibold">Edit note <span class="text-muted fw-normal">(optional)</span></label>
+    <input type="text" class="form-control" id="edit_note" name="edit_note" maxlength="255"
+           placeholder="What changed?">
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-floppy me-1"></i>Save
+    </button>
+    {% if page %}
+    <form method="post" action="/groups/{{ group.id }}/wiki/{{ page.slug }}/cancel-edit" class="d-inline">
+      <button type="submit" class="btn btn-outline-secondary">Cancel</button>
+    </form>
+    {% else %}
+    <a href="/groups/{{ group.id }}/wiki" class="btn btn-outline-secondary">Cancel</a>
+    {% endif %}
+  </div>
+</form>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+{% if not locked_by_other %}
+// ── Editor mode toggle ────────────────────────────────────────────────────────
+const btnWrite   = document.getElementById("btnWrite");
+const btnSplit   = document.getElementById("btnSplit");
+const btnPreview = document.getElementById("btnPreview");
+const edWrite    = document.getElementById("editor-write");
+const edSplit    = document.getElementById("editor-split");
+const edPreview  = document.getElementById("editor-preview");
+const bodyWrite  = document.getElementById("bodyWrite");
+const bodyMain   = document.getElementById("bodyMain");
+const previewEl  = document.getElementById("preview-pane");
+const previewSingle = edPreview;
+
+function renderPreview(src, target) {
+  target.innerHTML = marked.parse(src || "");
+}
+
+function setMode(mode) {
+  [btnWrite, btnSplit, btnPreview].forEach(b => b.classList.remove("active"));
+  edWrite.style.display = "none";
+  edSplit.style.setProperty("display", "none", "important");
+  edPreview.style.display = "none";
+
+  if (mode === "write") {
+    btnWrite.classList.add("active");
+    edWrite.style.display = "";
+    // sync bodyMain → bodyWrite if coming from split
+    if (bodyMain) bodyWrite.value = bodyMain.value;
+  } else if (mode === "split") {
+    btnSplit.classList.add("active");
+    edSplit.style.removeProperty("display");
+    // sync bodyWrite → bodyMain
+    if (bodyMain) bodyMain.value = bodyWrite.value;
+    renderPreview(bodyMain ? bodyMain.value : bodyWrite.value, previewEl);
+    bodyMain && bodyMain.addEventListener("input", () => renderPreview(bodyMain.value, previewEl));
+  } else {
+    btnPreview.classList.add("active");
+    edPreview.style.display = "";
+    renderPreview(bodyWrite.value, previewSingle);
+  }
+}
+
+btnWrite.addEventListener("click", () => setMode("write"));
+btnSplit.addEventListener("click", () => setMode("split"));
+btnPreview.addEventListener("click", () => setMode("preview"));
+{% endif %}
+</script>
+{% endblock %}

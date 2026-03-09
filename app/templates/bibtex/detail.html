@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+{% block title %}{{ collection.name }} — BibTeX{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/bibtex">BibTeX</a></li>
+    <li class="breadcrumb-item active">{{ collection.name }}</li>
+  </ol>
+</nav>
+
+{# ── Header ── #}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-bold mb-1">
+      <i class="bi bi-file-earmark-text me-2 text-primary"></i>{{ collection.name }}
+      <span class="badge bg-secondary ms-1" style="font-size:.7rem;vertical-align:middle">
+        {{ collection.entries | length }} entries
+      </span>
+    </h5>
+    {% if collection.description %}
+    <div class="text-muted small">{{ collection.description }}</div>
+    {% endif %}
+    {% if collection.group %}
+    <div class="text-muted small mt-1">
+      <i class="bi bi-collection me-1"></i>Group collection:
+      <a href="/groups/{{ collection.group.id }}">{{ collection.group.name }}</a>
+    </div>
+    {% elif collection.owner %}
+    <div class="text-muted small mt-1">Owner: {{ collection.owner.username }}</div>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="/bibtex/{{ collection.id }}/export" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-download me-1"></i>Download .bib
+    </a>
+    {% if can_manage %}
+    <a href="/bibtex/{{ collection.id }}/edit" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{# Flash messages #}
+{% set added = request.query_params.get('added') %}
+{% set skipped = request.query_params.get('skipped') %}
+{% set regen = request.query_params.get('regen') %}
+{% if added or skipped %}
+<div class="alert alert-info small py-2 mb-3">
+  {% if added %}<strong>{{ added }}</strong> entr{{ 'ies' if added | int != 1 else 'y' }} added.{% endif %}
+  {% if skipped and skipped != '0' %} <strong>{{ skipped }}</strong> skipped (duplicate cite keys).{% endif %}
+</div>
+{% endif %}
+{% if regen %}
+<div class="alert alert-success small py-2 mb-3">
+  <i class="bi bi-check-circle me-1"></i>Cite keys regenerated.
+</div>
+{% endif %}
+
+{# ── Tabs ── #}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'entries' %}active{% endif %}"
+       href="/bibtex/{{ collection.id }}?tab=entries">
+      <i class="bi bi-list-ul me-1"></i>Entries
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'export' %}active{% endif %}"
+       href="/bibtex/{{ collection.id }}?tab=export">
+      <i class="bi bi-eye me-1"></i>Export Preview
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'sharing' %}active{% endif %}"
+       href="/bibtex/{{ collection.id }}?tab=sharing">
+      <i class="bi bi-people me-1"></i>Sharing
+    </a>
+  </li>
+</ul>
+
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{% if tab == 'entries' %}
+
+{% if can_write %}
+{# Add BibTeX — entire header is the toggle trigger #}
+<div class="card mb-3">
+  <div class="card-header small fw-semibold d-flex justify-content-between align-items-center"
+       role="button" data-bs-toggle="collapse" data-bs-target="#addBibForm"
+       aria-expanded="false" aria-controls="addBibForm" style="cursor:pointer">
+    <span><i class="bi bi-plus-circle me-1"></i>Add BibTeX</span>
+    <i class="bi bi-chevron-down opacity-50"></i>
+  </div>
+  <div class="collapse" id="addBibForm">
+    <div class="card-body">
+      <form method="post" action="/bibtex/{{ collection.id }}/entries/add"
+            enctype="multipart/form-data">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Paste BibTeX</label>
+          <textarea name="bibtex_text" class="form-control font-monospace" rows="10"
+                    placeholder="@article{key,...}"></textarea>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Or upload a .bib file</label>
+          <input type="file" name="bibtex_file" class="form-control" accept=".bib,.txt">
+        </div>
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-circle me-1"></i>Parse &amp; Add
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <span class="small text-muted">
+    {{ collection.entries | length }} entr{{ 'ies' if collection.entries | length != 1 else 'y' }}
+  </span>
+  <div class="d-flex gap-2">
+    {% if can_write %}
+    <form method="post" action="/bibtex/{{ collection.id }}/regenerate-keys" class="d-inline"
+          onsubmit="return confirm('Regenerate all cite keys using the standard format {lastname}-{venue}{yy}{letter}? This will overwrite existing keys.')">
+      <button class="btn btn-sm btn-outline-secondary" title="Regenerate all cite keys">
+        <i class="bi bi-arrow-repeat me-1"></i>Regenerate Keys
+      </button>
+    </form>
+    <a href="/bibtex/{{ collection.id }}/entries/import-papers"
+       class="btn btn-sm btn-outline-success">
+      <i class="bi bi-arrow-down-circle me-1"></i>Import from Papers
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{% if collection.entries %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th style="width:140px">Key</th>
+        <th style="width:80px">Type</th>
+        <th>Title</th>
+        <th style="width:55px">Year</th>
+        <th>Author(s)</th>
+        {% if can_write %}<th style="width:80px"></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in collection.entries %}
+      <tr>
+        <td class="font-monospace small text-muted">{{ entry.cite_key }}</td>
+        <td>
+          {% set tc = entry_type_colors.get(entry.entry_type, 'secondary') %}
+          <span class="badge bg-{{ tc }}-subtle text-{{ tc }} border border-{{ tc }}-subtle"
+                style="font-size:.65rem">{{ entry.entry_type }}</span>
+        </td>
+        <td class="small">
+          {% if entry.title %}{{ entry.title | truncate(80) }}{% else %}<em class="text-muted">—</em>{% endif %}
+        </td>
+        <td class="small text-muted">{{ entry.year or '—' }}</td>
+        <td class="small text-muted">
+          {{ entry.authors_raw | truncate(40) if entry.authors_raw else '—' }}
+        </td>
+        {% if can_write %}
+        <td class="text-end">
+          <a href="/bibtex/{{ collection.id }}/entries/{{ entry.id }}/edit"
+             class="btn btn-xs btn-outline-secondary me-1">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form method="post"
+                action="/bibtex/{{ collection.id }}/entries/{{ entry.id }}/delete"
+                class="d-inline"
+                onsubmit="return confirm('Delete entry {{ entry.cite_key }}?')">
+            <button class="btn btn-xs btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="text-muted small fst-italic">
+  No entries yet.
+  {% if can_write %}Paste BibTeX above or import from papers.{% endif %}
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{% elif tab == 'export' %}
+
+{# Style summary chips #}
+<div class="mb-3 d-flex flex-wrap gap-1">
+  {% set af_labels = {'full': 'Full names', 'abbreviated': 'Abbreviated', 'last_only': 'Last only'} %}
+  <span class="badge bg-light text-dark border">Authors: {{ af_labels.get(style.author_format, style.author_format) }}</span>
+  {% if style.max_authors %}
+  <span class="badge bg-light text-dark border">Max {{ style.max_authors }} authors</span>
+  {% endif %}
+  {% if style.include_doi %}<span class="badge bg-light text-dark border">DOI</span>{% endif %}
+  {% if style.include_url %}<span class="badge bg-light text-dark border">URL</span>{% endif %}
+  {% if style.include_abstract %}<span class="badge bg-light text-dark border">Abstract</span>{% endif %}
+  {% if style.clean_proceedings %}<span class="badge bg-light text-dark border">Clean proceedings</span>{% endif %}
+  {% if style.use_crossref %}<span class="badge bg-light text-dark border">Crossref</span>{% endif %}
+</div>
+
+<div class="d-flex gap-2 mb-2">
+  <a href="/bibtex/{{ collection.id }}/export" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-download me-1"></i>Download .bib
+  </a>
+  <button class="btn btn-sm btn-outline-secondary" id="copyBibBtn">
+    <i class="bi bi-clipboard me-1"></i>Copy to clipboard
+  </button>
+</div>
+
+{% if preview_bib %}
+<pre id="bibPreview" class="small border rounded p-3 bg-light"
+     style="max-height:600px;overflow-y:auto;white-space:pre-wrap">{{ preview_bib }}</pre>
+{% if collection.entries | length > 15 %}
+<div class="text-muted small mt-1">Showing first 15 of {{ collection.entries | length }} entries.
+  <a href="/bibtex/{{ collection.id }}/export">Download</a> for all.</div>
+{% endif %}
+{% else %}
+<div class="text-muted small fst-italic">No entries to preview.</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{% elif tab == 'sharing' %}
+
+{% if collection.group_id %}
+{# ── Group-owned collection: show members + write-access management ── #}
+<div class="card" style="max-width:640px">
+  <div class="card-header fw-semibold small">
+    <i class="bi bi-collection me-1"></i>
+    Group collection — <a href="/groups/{{ collection.group.id }}">{{ collection.group.name }}</a>
+    <span class="text-muted fw-normal ms-2">All members have read access by default.</span>
+  </div>
+  {% if group_members %}
+  <div class="list-group list-group-flush">
+    {% for m in group_members %}
+    {% set is_revoked = m.user_id in revoked_user_ids %}
+    <div class="list-group-item py-2 d-flex justify-content-between align-items-center">
+      <div>
+        <span class="small fw-semibold">{{ m.user.username }}</span>
+        {% if m.role.value == 'admin' %}
+        <span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1"
+              style="font-size:.65rem">admin</span>
+        {% endif %}
+        {% if is_revoked %}
+        <span class="badge bg-secondary-subtle text-secondary border ms-1"
+              style="font-size:.65rem">read-only</span>
+        {% else %}
+        <span class="badge bg-success-subtle text-success border border-success-subtle ms-1"
+              style="font-size:.65rem">read+write</span>
+        {% endif %}
+      </div>
+      {% if can_manage and m.user_id != current_user.id %}
+      {% if is_revoked %}
+      <form method="post" action="/bibtex/{{ collection.id }}/unrevoke/{{ m.user_id }}">
+        <button class="btn btn-xs btn-outline-success">
+          <i class="bi bi-pencil me-1"></i>Grant write
+        </button>
+      </form>
+      {% else %}
+      <form method="post" action="/bibtex/{{ collection.id }}/revoke/{{ m.user_id }}"
+            onsubmit="return confirm('Revoke write access for {{ m.user.username }}?')">
+        <button class="btn btn-xs btn-outline-secondary">
+          <i class="bi bi-eye me-1"></i>Revoke write
+        </button>
+      </form>
+      {% endif %}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card-body text-muted small">No members in this group yet.</div>
+  {% endif %}
+</div>
+
+{% else %}
+{# ── User-owned collection: group share management ── #}
+<div class="row g-3" style="max-width:640px">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold small">Shared with groups</div>
+      {% if collection.shares %}
+      <div class="list-group list-group-flush">
+        {% for share in collection.shares %}
+        <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+          <span class="small fw-semibold">{{ share.group.name }}</span>
+          {% if can_manage %}
+          <form method="post"
+                action="/bibtex/{{ collection.id }}/shares/{{ share.id }}/delete">
+            <button class="btn btn-xs btn-outline-danger">
+              <i class="bi bi-x-lg"></i> Unshare
+            </button>
+          </form>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="card-body text-muted small">Not shared with any group yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if can_manage and shareable_groups %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold small">Share with a group</div>
+      <div class="card-body">
+        <form method="post" action="/bibtex/{{ collection.id }}/shares/add"
+              class="d-flex gap-2">
+          <select name="group_id" class="form-select form-select-sm" required>
+            <option value="">— select group —</option>
+            {% for g in shareable_groups %}
+            <option value="{{ g.id }}">{{ g.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-sm btn-primary text-nowrap">
+            <i class="bi bi-share me-1"></i>Share
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if tab == 'export' and preview_bib %}
+<script>
+document.getElementById('copyBibBtn')?.addEventListener('click', () => {
+  const text = document.getElementById('bibPreview').innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBibBtn');
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Copied!';
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy to clipboard'; }, 2000);
+  });
+});
+</script>
+{% endif %}
+{% endblock %}

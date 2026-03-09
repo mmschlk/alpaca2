@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}BibTeX Collections{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-file-earmark-text me-2"></i>BibTeX Collections</h4>
+  <div class="d-flex gap-2">
+    {% if admin_groups %}
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="bi bi-collection me-1"></i>New Group Collection
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        {% for g in admin_groups %}
+        <li>
+          <a class="dropdown-item small" href="/bibtex/new?group_id={{ g.id }}">
+            {{ g.name }}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    <a href="/bibtex/new" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New Personal Collection
+    </a>
+  </div>
+</div>
+
+{# ── My personal collections ── #}
+<div class="card mb-4">
+  <div class="card-header fw-semibold small">My Collections</div>
+  {% if my_collections %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Name</th>
+          <th class="text-center" style="width:80px">Entries</th>
+          <th>Shared with</th>
+          <th style="width:120px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col in my_collections %}
+        <tr>
+          <td>
+            <a href="/bibtex/{{ col.id }}" class="fw-semibold text-decoration-none">{{ col.name }}</a>
+            {% if col.description %}
+            <div class="text-muted small">{{ col.description | truncate(80) }}</div>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+              {{ col.entries | length }}
+            </span>
+          </td>
+          <td>
+            {% for share in col.shares %}
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"
+                  style="font-size:.7rem">{{ share.group.name }}</span>
+            {% else %}
+            <span class="text-muted small fst-italic">—</span>
+            {% endfor %}
+          </td>
+          <td class="text-end">
+            <a href="/bibtex/{{ col.id }}/export" class="btn btn-xs btn-outline-secondary me-1"
+               title="Download .bib"><i class="bi bi-download"></i></a>
+            <a href="/bibtex/{{ col.id }}/edit" class="btn btn-xs btn-outline-secondary me-1">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="post" action="/bibtex/{{ col.id }}/delete" class="d-inline"
+                  onsubmit="return confirm('Delete collection &quot;{{ col.name }}&quot;?')">
+              <button class="btn btn-xs btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-muted small">No personal collections yet. <a href="/bibtex/new">Create one</a>.</div>
+  {% endif %}
+</div>
+
+{# ── Group collections ── #}
+{% if group_collections %}
+<div class="card mb-4">
+  <div class="card-header fw-semibold small">
+    <i class="bi bi-collection me-1"></i>Group Collections
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Name</th>
+          <th>Group</th>
+          <th class="text-center" style="width:80px">Entries</th>
+          <th style="width:80px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col in group_collections %}
+        <tr>
+          <td>
+            <a href="/bibtex/{{ col.id }}" class="fw-semibold text-decoration-none">{{ col.name }}</a>
+            {% if col.description %}
+            <div class="text-muted small">{{ col.description | truncate(80) }}</div>
+            {% endif %}
+          </td>
+          <td class="small">
+            <a href="/groups/{{ col.group.id }}" class="text-decoration-none">{{ col.group.name }}</a>
+          </td>
+          <td class="text-center">
+            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+              {{ col.entries | length }}
+            </span>
+          </td>
+          <td class="text-end">
+            <a href="/bibtex/{{ col.id }}/export" class="btn btn-xs btn-outline-secondary"
+               title="Download .bib"><i class="bi bi-download"></i></a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Shared with me (user-owned collections shared via groups) ── #}
+{% if shared_collections %}
+<div class="card">
+  <div class="card-header fw-semibold small">Shared with Me</div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Name</th>
+          <th>Owner</th>
+          <th class="text-center" style="width:80px">Entries</th>
+          <th style="width:80px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col in shared_collections %}
+        <tr>
+          <td>
+            <a href="/bibtex/{{ col.id }}" class="fw-semibold text-decoration-none">{{ col.name }}</a>
+            {% if col.description %}
+            <div class="text-muted small">{{ col.description | truncate(80) }}</div>
+            {% endif %}
+          </td>
+          <td class="small">{{ col.owner.username if col.owner else '—' }}</td>
+          <td class="text-center">
+            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+              {{ col.entries | length }}
+            </span>
+          </td>
+          <td class="text-end">
+            <a href="/bibtex/{{ col.id }}/export" class="btn btn-xs btn-outline-secondary"
+               title="Download .bib"><i class="bi bi-download"></i></a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

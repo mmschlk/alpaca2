@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ entry.title }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/notebook">Notebook</a></li>
+    <li class="breadcrumb-item active">{{ entry.title }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <h4 class="mb-0 fw-bold">{{ entry.title }}</h4>
+  {% if current_user and entry.user_id == current_user.id %}
+  <div class="d-flex gap-2 flex-shrink-0">
+    <a href="/notebook/map" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-diagram-3 me-1"></i>Mind Map
+    </a>
+    <a href="/notebook/{{ entry.id }}/edit" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    <form method="post" action="/notebook/{{ entry.id }}/delete" class="d-inline"
+          onsubmit="return confirm('Delete this entry?')">
+      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+{# Metadata row #}
+<div class="d-flex flex-wrap gap-2 align-items-center mb-4 text-muted small">
+  <span><i class="bi bi-clock me-1"></i>{{ entry.updated_at.strftime('%B %d, %Y') }}</span>
+
+  {% if entry.entry_tags %}
+  <span class="text-muted">·</span>
+  {% for et in entry.entry_tags %}
+  <a href="/notebook?tag={{ et.tag.name }}" class="badge bg-secondary text-decoration-none">
+    {{ et.tag.name }}
+  </a>
+  {% endfor %}
+  {% endif %}
+
+  {% if entry.is_shared %}
+  <span class="text-muted">·</span>
+  {% if entry.shared_groups %}
+  <span class="badge bg-info text-dark">
+    <i class="bi bi-people-fill me-1"></i>
+    Shared with {{ entry.shared_groups | map(attribute='group') | map(attribute='name') | join(', ') }}
+  </span>
+  {% else %}
+  <span class="badge bg-info text-dark"><i class="bi bi-people-fill me-1"></i>Shared</span>
+  {% endif %}
+  {% else %}
+  <span class="badge bg-light text-secondary border"><i class="bi bi-lock me-1"></i>Private</span>
+  {% endif %}
+
+  {% if entry.paper %}
+  <span class="text-muted">·</span>
+  <a href="/papers/{{ entry.paper.id }}" class="text-decoration-none small">
+    <i class="bi bi-file-earmark-text me-1"></i>{{ entry.paper.title[:50] }}{% if entry.paper.title | length > 50 %}…{% endif %}
+  </a>
+  {% endif %}
+  {% if entry.conference %}
+  <span class="text-muted">·</span>
+  <a href="/conferences/{{ entry.conference.id }}" class="text-decoration-none small">
+    <i class="bi bi-calendar-event me-1"></i>{{ entry.conference.abbreviation }}
+  </a>
+  {% endif %}
+</div>
+
+{# Body #}
+<div class="card">
+  <div class="card-body">
+    {% if rendered %}
+    <div class="prose" style="max-width:none">{{ rendered | safe }}</div>
+    {% else %}
+    <p class="text-muted fst-italic mb-0">No content yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

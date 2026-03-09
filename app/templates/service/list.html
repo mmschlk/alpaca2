@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Community Service{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2"></i>Community Service</h4>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#addServiceForm">
+    <i class="bi bi-plus-lg me-1"></i>Add Record
+  </button>
+</div>
+
+{# ── Stats ── #}
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-3 fw-bold">{{ total_records }}</div>
+        <div class="small text-muted">Service Records</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-3 fw-bold">{{ total_papers }}</div>
+        <div class="small text-muted">Papers Reviewed</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-3 fw-bold">{{ by_year | length }}</div>
+        <div class="small text-muted">Years Active</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Add form (collapsible) ── #}
+<div class="collapse mb-4" id="addServiceForm">
+  <div class="card">
+    <div class="card-header fw-semibold small">
+      <i class="bi bi-plus-circle me-1"></i>New Service Record
+    </div>
+    <div class="card-body">
+      <form method="post" action="/service" id="serviceForm">
+
+        {# Type toggle #}
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Venue Type *</label>
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="service_type" id="type_conf" value="conference" checked
+                   onchange="document.getElementById('confSection').classList.remove('d-none');document.getElementById('jnlSection').classList.add('d-none')">
+            <label class="btn btn-outline-primary" for="type_conf">
+              <i class="bi bi-calendar-event me-1"></i>Conference
+            </label>
+            <input type="radio" class="btn-check" name="service_type" id="type_jnl" value="journal"
+                   onchange="document.getElementById('jnlSection').classList.remove('d-none');document.getElementById('confSection').classList.add('d-none')">
+            <label class="btn btn-outline-info" for="type_jnl">
+              <i class="bi bi-journal-bookmark me-1"></i>Journal
+            </label>
+          </div>
+        </div>
+
+        {# Conference section #}
+        <div id="confSection">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Conference *</label>
+              <select id="confSelect" class="form-select" onchange="loadEditions(this.value)">
+                <option value="">— select conference —</option>
+                {% for c in conferences %}
+                <option value="{{ c.id }}">{{ c.abbreviation }} — {{ c.name | truncate(50) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Edition Year *</label>
+              <select name="conference_edition_id" id="editionSelect" class="form-select">
+                <option value="">— select conference first —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {# Journal section #}
+        <div id="jnlSection" class="d-none">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Journal *</label>
+              <select name="journal_id" class="form-select">
+                <option value="">— select journal —</option>
+                {% for j in journals %}
+                <option value="{{ j.id }}">{{ j.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Year *</label>
+              <input type="number" name="year" class="form-control" min="1990" max="2050"
+                     placeholder="e.g. 2024">
+            </div>
+          </div>
+        </div>
+
+        {# Role + papers + notes #}
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">Role *</label>
+            <select name="role" class="form-select" required>
+              {% for r in all_roles %}
+              <option value="{{ r.value }}">{{ role_labels[r] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">Papers Reviewed <span class="text-muted fw-normal">(optional)</span></label>
+            <input type="number" name="num_papers" class="form-control" min="0" placeholder="e.g. 8">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label small fw-semibold">Notes <span class="text-muted fw-normal">(optional)</span></label>
+            <input type="text" name="notes" class="form-control" placeholder="Any additional notes…">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Save Record</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm ms-2"
+                onclick="document.getElementById('addServiceForm').classList.remove('show')">Cancel</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ── Records grouped by year ── #}
+{% if by_year %}
+  {% for year in by_year.keys() | sort(reverse=true) %}
+  <div class="mb-4">
+    <h6 class="fw-bold text-muted mb-2 border-bottom pb-1">{{ year }}</h6>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-sm">
+          <thead class="table-light">
+            <tr>
+              <th>Venue</th>
+              <th>Role</th>
+              <th>Papers</th>
+              <th>Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rec in by_year[year] %}
+            <tr>
+              <td class="fw-semibold small">
+                {% if rec.conference_edition and rec.conference_edition.conference %}
+                  <i class="bi bi-calendar-event text-muted me-1"></i>
+                  <a href="/conferences/{{ rec.conference_edition.conference_id }}"
+                     class="text-decoration-none">
+                    {{ rec.conference_edition.conference.abbreviation }} {{ rec.conference_edition.year }}
+                  </a>
+                {% elif rec.journal %}
+                  <i class="bi bi-journal-bookmark text-muted me-1"></i>
+                  <a href="/journals/{{ rec.journal_id }}" class="text-decoration-none">
+                    {{ rec.journal.abbreviation or rec.journal.name }}
+                  </a>
+                {% else %}
+                  <span class="text-muted fst-italic">Unknown venue</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge bg-{{ role_colors[rec.role] }}
+                             {% if rec.role.value in ['workshop_organizer'] %}text-dark{% endif %}">
+                  {{ role_labels[rec.role] }}
+                </span>
+              </td>
+              <td class="small text-muted">
+                {% if rec.num_papers %}{{ rec.num_papers }}{% else %}—{% endif %}
+              </td>
+              <td class="small text-muted fst-italic">{{ rec.notes or '—' }}</td>
+              <td class="text-end">
+                <form method="post" action="/service/{{ rec.id }}/delete"
+                      onsubmit="return confirm('Delete this record?')">
+                  <button class="btn btn-sm btn-outline-danger py-0 px-1">
+                    <i class="bi bi-x"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-people fs-1 d-block mb-2 opacity-25"></i>
+  No service records yet. Add your first one above.
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadEditions(confId) {
+    const sel = document.getElementById('editionSelect');
+    if (!confId) {
+        sel.innerHTML = '<option value="">— select conference first —</option>';
+        return;
+    }
+    const resp = await fetch('/service/editions/' + confId);
+    sel.innerHTML = await resp.text();
+}
+</script>
+{% endblock %}

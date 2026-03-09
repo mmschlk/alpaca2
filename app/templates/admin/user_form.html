@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{% if edited_user %}Edit {{ edited_user.username }}{% else %}New User{% endif %}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/admin">Admin</a></li>
+    <li class="breadcrumb-item"><a href="/admin/users">Users</a></li>
+    <li class="breadcrumb-item active">
+      {% if edited_user %}Edit {{ edited_user.username }}{% else %}New User{% endif %}
+    </li>
+  </ol>
+</nav>
+
+<div class="card" style="max-width:560px">
+  <div class="card-body">
+    <h5 class="fw-bold mb-4">
+      {% if edited_user %}
+      <i class="bi bi-person-gear me-2"></i>Edit User — {{ edited_user.username }}
+      {% else %}
+      <i class="bi bi-person-plus me-2"></i>New User
+      {% endif %}
+    </h5>
+
+    <form method="post" action="{{ action }}">
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Username *</label>
+        <input type="text" name="username" class="form-control" required
+               value="{{ edited_user.username if edited_user else '' }}"
+               placeholder="jdoe" autocomplete="off">
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Email *</label>
+        <input type="email" name="email" class="form-control" required
+               value="{{ edited_user.email if edited_user else '' }}"
+               placeholder="jdoe@example.com">
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">
+          Password{% if edited_user %} <span class="text-muted fw-normal">(leave blank to keep current)</span>{% else %} *{% endif %}
+        </label>
+        <input type="password" name="password" class="form-control"
+               {% if not edited_user %}required{% endif %}
+               autocomplete="new-password" placeholder="••••••••">
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Linked Author Profile</label>
+        <select name="author_id" class="form-select">
+          <option value="">— None —</option>
+          {% for a in authors %}
+          <option value="{{ a.id }}"
+            {% if edited_user and edited_user.author_id == a.id %}selected{% endif %}>
+            {{ a.full_name }}{% if a.email %} ({{ a.email }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Linking an author profile enables paper co-authorship visibility.</div>
+      </div>
+
+      <hr class="my-3">
+
+      <div class="d-flex gap-4 mb-3 flex-wrap">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_active" value="true" id="chkActive"
+                 {% if not edited_user or edited_user.is_active %}checked{% endif %}
+                 {% if edited_user and edited_user.id == current_user.id %}disabled{% endif %}>
+          <label class="form-check-label small fw-semibold" for="chkActive">Active</label>
+          {% if edited_user and edited_user.id == current_user.id %}
+          <div class="form-text">Cannot change your own active status.</div>
+          {% endif %}
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_moderator" value="true" id="chkModerator"
+                 {% if edited_user and edited_user.is_moderator %}checked{% endif %}>
+          <label class="form-check-label small fw-semibold" for="chkModerator">
+            Moderator <span class="badge bg-info ms-1">mod</span>
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_admin" value="true" id="chkAdmin"
+                 {% if edited_user and edited_user.is_admin %}checked{% endif %}
+                 {% if edited_user and edited_user.id == current_user.id %}disabled{% endif %}>
+          <label class="form-check-label small fw-semibold" for="chkAdmin">
+            Admin <span class="badge bg-danger ms-1">admin</span>
+          </label>
+          {% if edited_user and edited_user.id == current_user.id %}
+          <div class="form-text">Cannot change your own admin status.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">
+          {% if edited_user %}Save Changes{% else %}Create User{% endif %}
+        </button>
+        <a href="/admin/users" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

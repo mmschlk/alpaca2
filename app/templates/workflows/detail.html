@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+{% block title %}{{ workflow.name }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/workflows">Workflows</a></li>
+    <li class="breadcrumb-item active">{{ workflow.name }}</li>
+  </ol>
+</nav>
+
+{# ── Header ── #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h4 class="fw-bold mb-1">{{ workflow.name }}</h4>
+    {% if workflow.description %}
+    <p class="text-muted mb-1">{{ workflow.description }}</p>
+    {% endif %}
+    <div class="d-flex gap-2 text-muted small">
+      {% if workflow.owner %}
+      <span><i class="bi bi-person me-1"></i>{{ workflow.owner.username }}</span>
+      {% endif %}
+      {% if workflow.is_public %}
+      <span class="badge bg-success-subtle text-success border border-success-subtle">Public</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-1 flex-shrink-0">
+    {# Apply to me #}
+    <form method="post" action="/workflows/{{ workflow.id }}/apply/me">
+      <button class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-person-check me-1"></i>Apply to me
+      </button>
+    </form>
+    {# Apply to paper dropdown #}
+    {% if visible_papers %}
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="bi bi-file-earmark-plus me-1"></i>Apply to paper
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto">
+        {% for p in visible_papers %}
+        <li>
+          <form method="post" action="/workflows/{{ workflow.id }}/apply/paper/{{ p.id }}">
+            <button class="dropdown-item small py-1">{{ p.title | truncate(50) }}</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% if can_edit %}
+    <a href="/workflows/{{ workflow.id }}/edit" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+
+  {# ── Steps ── #}
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header fw-semibold small">
+        <i class="bi bi-check2-square me-1"></i>Steps
+        <span class="badge bg-secondary ms-1">{{ workflow.steps | length }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if workflow.steps %}
+        <ol class="list-group list-group-flush list-group-numbered">
+          {% for step in workflow.steps %}
+          <li class="list-group-item d-flex justify-content-between align-items-start py-2 px-3">
+            <div class="ms-2 me-auto">
+              <div class="fw-semibold" style="font-size:0.9rem">{{ step.title }}</div>
+              {% if step.description %}
+              <div class="text-muted small">{{ step.description }}</div>
+              {% endif %}
+              {% if step.due_offset_days is not none %}
+              <div class="text-muted" style="font-size:0.75rem">
+                <i class="bi bi-calendar me-1"></i>Due {{ step.due_offset_days }}d after trigger
+              </div>
+              {% endif %}
+            </div>
+            {% if step.depends_on %}
+            <div class="text-muted ms-2" style="font-size:0.75rem">
+              <i class="bi bi-arrow-return-right me-1"></i>depends on: <em>{{ step.depends_on.title }}</em>
+            </div>
+            {% endif %}
+            {% if can_edit %}
+            <div class="d-flex gap-1 ms-2 flex-shrink-0 align-items-start flex-wrap">
+              <form method="post" action="/workflows/{{ workflow.id }}/steps/{{ step.id }}/depends-on">
+                <select name="depends_on_id" class="form-select form-select-sm py-0"
+                        style="font-size:0.72rem;min-width:110px" onchange="this.form.submit()" title="Dependency">
+                  <option value="">no dep.</option>
+                  {% for other in workflow.steps %}{% if other.id != step.id %}
+                  <option value="{{ other.id }}" {% if step.depends_on_id == other.id %}selected{% endif %}>
+                    ↳ {{ other.title | truncate(22) }}
+                  </option>
+                  {% endif %}{% endfor %}
+                </select>
+              </form>
+              <form method="post" action="/workflows/{{ workflow.id }}/steps/{{ step.id }}/move">
+                <input type="hidden" name="direction" value="up">
+                <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Move up">
+                  <i class="bi bi-chevron-up" style="font-size:0.7rem"></i>
+                </button>
+              </form>
+              <form method="post" action="/workflows/{{ workflow.id }}/steps/{{ step.id }}/move">
+                <input type="hidden" name="direction" value="down">
+                <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Move down">
+                  <i class="bi bi-chevron-down" style="font-size:0.7rem"></i>
+                </button>
+              </form>
+              <form method="post" action="/workflows/{{ workflow.id }}/steps/{{ step.id }}/delete"
+                    onsubmit="return confirm('Remove this step?')">
+                <button class="btn btn-sm btn-outline-danger py-0 px-1">
+                  <i class="bi bi-x" style="font-size:0.8rem"></i>
+                </button>
+              </form>
+            </div>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">No steps yet.</p>
+        {% endif %}
+      </div>
+      {% if can_edit %}
+      <div class="card-footer bg-transparent">
+        <form method="post" action="/workflows/{{ workflow.id }}/steps" class="d-flex flex-column gap-2">
+          <input type="text" name="title" class="form-control form-control-sm" required
+                 placeholder="Step title *">
+          <textarea name="description" class="form-control form-control-sm" rows="2"
+                    placeholder="Description (optional)"></textarea>
+          <div class="d-flex gap-2 align-items-center">
+            <input type="number" name="due_offset_days" class="form-control form-control-sm"
+                   placeholder="Due in N days" min="0" style="max-width:130px">
+            <button class="btn btn-sm btn-primary">
+              <i class="bi bi-plus-lg me-1"></i>Add step
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+
+    {# ── Dependency graph ── #}
+    {% if workflow.steps | length > 1 %}
+    <div class="card mb-4">
+      <div class="card-header fw-semibold small">
+        <i class="bi bi-diagram-2 me-1"></i>Dependency Graph
+      </div>
+      <div class="card-body p-0">
+        <div id="depGraph" style="height:220px"></div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Triggers ── #}
+    <div class="card mb-4">
+      <div class="card-header fw-semibold small">
+        <i class="bi bi-lightning me-1"></i>Triggers
+        <span class="badge bg-secondary ms-1">{{ workflow.triggers | length }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if workflow.triggers %}
+        <ul class="list-group list-group-flush">
+          {% for t in workflow.triggers %}
+          <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+            <div>
+              {% if t.trigger_type.value == 'paper_status' %}
+              <i class="bi bi-file-earmark-arrow-right text-primary me-1"></i>
+              Paper status changes to
+              <span class="badge bg-secondary ms-1">{{ status_labels.get(t.target_status, t.target_status) }}</span>
+              {% else %}
+              <i class="bi bi-people text-success me-1"></i>
+              User joins
+              <span class="fw-semibold ms-1">{{ t.group.name if t.group else '(group deleted)' }}</span>
+              {% endif %}
+            </div>
+            {% if can_edit %}
+            <form method="post" action="/workflows/{{ workflow.id }}/triggers/{{ t.id }}/delete">
+              <button class="btn btn-sm btn-outline-danger py-0 px-1">
+                <i class="bi bi-x" style="font-size:0.8rem"></i>
+              </button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">No triggers — workflow can only be applied manually.</p>
+        {% endif %}
+      </div>
+      {% if can_edit %}
+      <div class="card-footer bg-transparent">
+        <form method="post" action="/workflows/{{ workflow.id }}/triggers" class="d-flex flex-wrap gap-2 align-items-end">
+          <div>
+            <label class="form-label small fw-semibold mb-1">Type</label>
+            <select name="trigger_type" id="triggerType" class="form-select form-select-sm" style="min-width:160px">
+              <option value="paper_status">Paper status change</option>
+              <option value="group_join">User joins group</option>
+            </select>
+          </div>
+          <div id="statusField">
+            <label class="form-label small fw-semibold mb-1">Target status</label>
+            <select name="target_status" class="form-select form-select-sm">
+              {% for val, label in status_labels.items() %}
+              <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div id="groupField" style="display:none">
+            <label class="form-label small fw-semibold mb-1">Group</label>
+            <select name="group_id" class="form-select form-select-sm">
+              <option value="">— Select group —</option>
+              {% for g in all_groups %}
+              <option value="{{ g.id }}">{{ g.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-sm btn-primary align-self-end">
+            <i class="bi bi-plus-lg me-1"></i>Add trigger
+          </button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── Shares ── #}
+    {% if can_edit %}
+    <div class="card">
+      <div class="card-header fw-semibold small">
+        <i class="bi bi-share me-1"></i>Sharing
+      </div>
+      <div class="card-body p-0">
+        {% if workflow.shares %}
+        <ul class="list-group list-group-flush">
+          {% for sh in workflow.shares %}
+          <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+            <div>
+              {% if sh.shared_with_user %}
+              <i class="bi bi-person me-1 text-muted"></i>{{ sh.shared_with_user.username }}
+              {% elif sh.shared_with_group %}
+              <i class="bi bi-collection me-1 text-muted"></i>{{ sh.shared_with_group.name }}
+              {% endif %}
+            </div>
+            <form method="post" action="/workflows/{{ workflow.id }}/shares/{{ sh.id }}/delete">
+              <button class="btn btn-sm btn-outline-danger py-0 px-1">
+                <i class="bi bi-x" style="font-size:0.8rem"></i>
+              </button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">Not shared with anyone.</p>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent">
+        <form method="post" action="/workflows/{{ workflow.id }}/shares" class="d-flex flex-wrap gap-2 align-items-end">
+          <div>
+            <label class="form-label small fw-semibold mb-1">Share with user</label>
+            <select name="share_user_id" class="form-select form-select-sm" style="min-width:150px">
+              <option value="">— none —</option>
+              {% for u in all_users %}
+              {% if u.id != current_user.id %}
+              <option value="{{ u.id }}">{{ u.username }}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="form-label small fw-semibold mb-1">Share with group</label>
+            <select name="share_group_id" class="form-select form-select-sm" style="min-width:150px">
+              <option value="">— none —</option>
+              {% for g in all_groups %}
+              <option value="{{ g.id }}">{{ g.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-sm btn-primary align-self-end">
+            <i class="bi bi-plus-lg me-1"></i>Share
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>{# col #}
+</div>{# row #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const sel = document.getElementById('triggerType');
+  const sf  = document.getElementById('statusField');
+  const gf  = document.getElementById('groupField');
+  if (!sel) return;
+  function update() {
+    const v = sel.value;
+    sf.style.display = v === 'paper_status' ? '' : 'none';
+    gf.style.display = v === 'group_join'   ? '' : 'none';
+  }
+  sel.addEventListener('change', update);
+  update();
+})();
+</script>
+
+{% if workflow.steps | length > 1 %}
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
+<script>
+(function () {
+  const steps = {{ workflow.steps | map(attribute='id') | list | tojson }};
+  const titles = {{ workflow.steps | map(attribute='title') | list | tojson }};
+  const deps   = {{ workflow.steps | map(attribute='depends_on_id') | list | tojson }};
+
+  const nodes = steps.map((id, i) => ({
+    id, label: titles[i].length > 28 ? titles[i].slice(0, 26) + '…' : titles[i],
+    shape: 'box', font: { size: 12 },
+    color: { background: '#e9ecef', border: '#6c757d', highlight: { background: '#cfe2ff', border: '#0d6efd' } }
+  }));
+
+  const edges = [];
+  steps.forEach((id, i) => {
+    if (deps[i]) edges.push({ from: deps[i], to: id, arrows: 'to', color: '#6c757d' });
+  });
+
+  const container = document.getElementById('depGraph');
+  if (!container) return;
+  new vis.Network(container, { nodes, edges }, {
+    layout: { hierarchical: { direction: 'LR', sortMethod: 'directed', levelSeparation: 140, nodeSpacing: 60 } },
+    physics: false,
+    interaction: { dragNodes: false, zoomView: true },
+    edges: { smooth: { type: 'cubicBezier', forceDirection: 'horizontal' } },
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

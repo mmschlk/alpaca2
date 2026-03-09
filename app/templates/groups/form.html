@@ -10,7 +10,7 @@
 <div class="card" style="max-width:480px">
   <div class="card-body">
     <h5 class="fw-bold mb-4">{{ 'Edit Group' if group else 'New Research Group' }}</h5>
-    <form method="post" action="{{ action }}">
+    <form method="post" action="{{ action }}" enctype="multipart/form-data">
       <div class="mb-3">
         <label class="form-label small fw-semibold">Name *</label>
         <input type="text" name="name" class="form-control" required
@@ -20,7 +20,7 @@
         <label class="form-label small fw-semibold">Description</label>
         <textarea name="description" class="form-control" rows="3">{{ group.description or '' if group else '' }}</textarea>
       </div>
-      <div class="mb-4">
+      <div class="mb-3">
         <label class="form-label small fw-semibold">Parent Group</label>
         <select name="parent_group_id" class="form-select">
           <option value="">— none (top-level) —</option>
@@ -29,6 +29,24 @@
           {% endfor %}
         </select>
       </div>
+      <div class="mb-4">
+        <label class="form-label small fw-semibold">Logo</label>
+        {% if group and group.logo_path %}
+        <div class="mb-2 d-flex align-items-center gap-3">
+          <img src="{{ group.logo_path }}" alt="Current logo"
+               style="max-height:64px;max-width:160px;object-fit:contain;border:1px solid #dee2e6;border-radius:.375rem;padding:4px">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="remove_logo" value="1" id="removeLogo">
+            <label class="form-check-label small text-danger" for="removeLogo">Remove logo</label>
+          </div>
+        </div>
+        {% endif %}
+        <input type="file" name="logo" class="form-control" accept="image/png,image/jpeg,image/svg+xml"
+               id="logoInput" onchange="previewLogo(this)">
+        <div class="form-text">PNG, JPG or SVG. Replaces existing logo if one is set.</div>
+        <img id="logoPreview" src="" alt="" class="mt-2"
+             style="max-height:64px;max-width:160px;object-fit:contain;display:none;border:1px solid #dee2e6;border-radius:.375rem;padding:4px">
+      </div>
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">Save</button>
         <a href="/groups{% if group %}/{{ group.id }}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
@@ -36,4 +54,17 @@
     </form>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function previewLogo(input) {
+  const preview = document.getElementById('logoPreview');
+  if (input.files && input.files[0]) {
+    preview.src = URL.createObjectURL(input.files[0]);
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+}
+</script>
 {% endblock %}

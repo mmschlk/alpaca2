@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Wiki — {{ group.name }}{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/groups">Groups</a></li>
+    <li class="breadcrumb-item"><a href="/groups/{{ group.id }}">{{ group.name }}</a></li>
+    <li class="breadcrumb-item active">Wiki</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-journal-richtext me-2"></i>{{ group.name }} Wiki</h4>
+  <a href="/groups/{{ group.id }}/wiki/new" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>New Page
+  </a>
+</div>
+
+{% if pages %}
+<div class="row g-3">
+  {% for page in pages %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100 shadow-sm {% if page.is_pinned %}border-warning border-opacity-50{% endif %}">
+      <div class="card-body">
+        <h6 class="card-title fw-semibold mb-1 d-flex align-items-center gap-2">
+          {% if page.is_pinned %}<i class="bi bi-pin-fill text-warning"></i>{% endif %}
+          <a href="/groups/{{ group.id }}/wiki/{{ page.slug }}" class="text-decoration-none text-body-emphasis">
+            {{ page.title }}
+          </a>
+          {% if page.is_locked %}
+          <span class="badge bg-warning text-dark ms-auto" title="Being edited by {{ page.locked_by.username if page.locked_by else '' }}">
+            <i class="bi bi-lock-fill"></i>
+          </span>
+          {% endif %}
+        </h6>
+        <p class="card-text text-muted small mb-0"
+           style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">
+          {{ page.body[:200] if page.body else 'No content yet.' }}
+        </p>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 d-flex justify-content-between align-items-center">
+        <span class="text-muted small">
+          {{ page.updated_at.strftime('%b %d, %Y') }}
+        </span>
+        <div class="d-flex gap-1">
+          <a href="/groups/{{ group.id }}/wiki/{{ page.slug }}/edit"
+             class="btn btn-sm btn-outline-primary {% if page.locked_by_other(current_user.id) %}disabled{% endif %}">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <a href="/groups/{{ group.id }}/wiki/{{ page.slug }}/history"
+             class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clock-history"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-journal-richtext fs-1 d-block mb-2 opacity-25"></i>
+  No wiki pages yet.
+  <a href="/groups/{{ group.id }}/wiki/new">Create the first page</a>
+</div>
+{% endif %}
+
+{% endblock %}

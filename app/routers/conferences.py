@@ -1,6 +1,8 @@
 from datetime import date
 from typing import Optional
 
+import httpx
+from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -12,6 +14,45 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.conference import Conference, ConferenceEdition, StarredConferenceEdition
 from app.wikicfp import fetch_editions, fetch_event_cfp
+
+_CORE_SOURCE_PRIORITY = [
+    "ICORE2026", "CORE2023", "CORE2021", "CORE2020",
+    "CORE2018", "CORE2017", "CORE2014", "CORE2013", "CORE2008",
+]
+
+
+async def _fetch_core_rank(abbreviation: str) -> tuple[str | None, str | None]:
+    """Scrape the CORE portal and return (rank, source) for the given acronym."""
+    url = (
+        "https://portal.core.edu.au/conf-ranks/"
+        f"?search={abbreviation}&by=acronym&source=all&sort=arank&page=1"
+    )
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+    table = soup.find("table")
+    if not table:
+        return None, None
+    matches: list[tuple[str, str]] = []
+    for row in table.find_all("tr"):
+        cells = row.find_all("td")
+        if len(cells) < 4:
+            continue
+        acronym = cells[1].get_text(strip=True)
+        source = cells[2].get_text(strip=True)
+        rank = cells[3].get_text(strip=True)
+        if acronym.upper() == abbreviation.upper():
+            if rank.startswith("National"):
+                rank = "National"
+            matches.append((rank, source))
+    if not matches:
+        return None, None
+    for preferred in _CORE_SOURCE_PRIORITY:
+        for rank, source in matches:
+            if source == preferred:
+                return rank, source
+    return matches[0]
 
 router = APIRouter(prefix="/conferences", tags=["conferences"])
 templates = Jinja2Templates(directory="app/templates")
@@ -419,3 +460,51 @@ async def wikicfp_import(
 
     await db.commit()
     return RedirectResponse(f"/conferences/{conf_id}", 302)
+
+
+@router.get("/{conf_id}/core-rank", response_class=HTMLResponse)
+async def core_rank_fetch(
+    request: Request, conf_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Fetch CORE rank from portal and return an HTMX preview fragment."""
+    if not current_user:
+        return HTMLResponse("", status_code=401)
+    result = await db.execute(select(Conference).where(Conference.id == conf_id))
+    conf = result.scalar_one_or_none()
+    if not conf:
+        return HTMLResponse("<div class='alert alert-danger mt-2'>Conference not found.</div>")
+    try:
+        rank, source = await _fetch_core_rank(conf.abbreviation)
+    except Exception as exc:
+        return HTMLResponse(
+            f"<div class='alert alert-danger mt-2'><strong>CORE fetch failed:</strong> {exc}</div>"
+        )
+    if rank is None:
+        return HTMLResponse(
+            f"<div class='alert alert-warning mt-2'>No ranking found for "
+            f"<strong>{conf.abbreviation}</strong> on the CORE portal.</div>"
+        )
+    return templates.TemplateResponse(
+        request, "conferences/core_rank_preview.html",
+        {"conf_id": conf_id, "rank": rank, "source": source, "current_rank": conf.core_rank},
+    )
+
+
+@router.post("/{conf_id}/core-rank", response_class=HTMLResponse)
+async def core_rank_apply(
+    conf_id: int,
+    rank: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return HTMLResponse("", status_code=401)
+    result = await db.execute(select(Conference).where(Conference.id == conf_id))
+    conf = result.scalar_one_or_none()
+    if not conf:
+        return HTMLResponse("", status_code=404)
+    conf.core_rank = rank or None
+    await db.commit()
+    return HTMLResponse("", headers={"HX-Redirect": f"/conferences/{conf_id}"})

@@ -15,6 +15,7 @@ class Affiliation(Base):
     sigle: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     country: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     color: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)  # hex, e.g. #003366
+    logo_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     website: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

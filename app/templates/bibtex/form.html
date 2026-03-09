@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if collection else 'New' }} BibTeX Collection{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/bibtex">BibTeX</a></li>
+    {% if collection %}
+    <li class="breadcrumb-item"><a href="/bibtex/{{ collection.id }}">{{ collection.name }}</a></li>
+    {% endif %}
+    <li class="breadcrumb-item active">{{ 'Edit' if collection else 'New Collection' }}</li>
+  </ol>
+</nav>
+
+<div class="card" style="max-width:640px">
+  <div class="card-body">
+    <h5 class="card-title fw-bold mb-4">{{ 'Edit Collection' if collection else 'New BibTeX Collection' }}</h5>
+    <form method="post" action="{{ action }}">
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Name *</label>
+        <input type="text" name="name" class="form-control" required autofocus
+               value="{{ collection.name if collection else '' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Description</label>
+        <textarea name="description" class="form-control" rows="2">{{ collection.description if collection and collection.description else '' }}</textarea>
+      </div>
+
+      {# ── Owner (only on new collection form, if user is admin of at least one group) ── #}
+      {% if not collection and admin_groups %}
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Owner</label>
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="radio" name="group_id" id="ownerPersonal"
+                 value="" {% if not preselect_group_id %}checked{% endif %}
+                 onchange="document.getElementById('groupOwnerNote').style.display='none'">
+          <label class="form-check-label small" for="ownerPersonal">Personal collection (owned by me)</label>
+        </div>
+        {% for g in admin_groups %}
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="radio" name="group_id" id="ownerGroup{{ g.id }}"
+                 value="{{ g.id }}" {% if preselect_group_id == g.id %}checked{% endif %}
+                 onchange="document.getElementById('groupOwnerNote').style.display=''">
+          <label class="form-check-label small" for="ownerGroup{{ g.id }}">
+            <i class="bi bi-collection me-1 text-primary"></i>{{ g.name }}
+            <span class="text-muted">(group collection — auto-shared with all members)</span>
+          </label>
+        </div>
+        {% endfor %}
+        <div id="groupOwnerNote" class="form-text mt-1"
+             style="display:{{ 'none' if not preselect_group_id else '' }}">
+          <i class="bi bi-info-circle me-1"></i>All group members will have read + write access.
+          You can restrict write access per member after creation.
+        </div>
+      </div>
+      {% endif %}
+
+      {# ── Style card ── #}
+      <div class="card mb-3">
+        <div class="card-header fw-semibold small">Export Style</div>
+        <div class="card-body">
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold d-block">Author name format</label>
+            {% for val, label in [('full','Full names (Last, First Middle)'), ('abbreviated','Abbreviated first names (Last, F. M.)'), ('last_only','Last name only')] %}
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="author_format"
+                     id="af_{{ val }}" value="{{ val }}"
+                     {% if style.author_format == val %}checked{% endif %}>
+              <label class="form-check-label small" for="af_{{ val }}">{{ label }}</label>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="max_authors">Max authors shown</label>
+            <input type="number" id="max_authors" name="max_authors" class="form-control form-control-sm"
+                   style="max-width:100px" min="0" value="{{ style.max_authors }}">
+            <div class="form-text">0 = show all; N = show N then "and others"</div>
+          </div>
+
+          <div class="mb-2">
+            {% for name, label in [
+              ('include_doi', 'Include DOI'),
+              ('include_url', 'Include URL'),
+              ('include_abstract', 'Include abstract'),
+            ] %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="{{ name }}"
+                     id="{{ name }}" value="1" {% if style[name] %}checked{% endif %}>
+              <label class="form-check-label small" for="{{ name }}">{{ label }}</label>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-2 border-top pt-2 mt-2">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="clean_proceedings"
+                     id="clean_proceedings" value="1" {% if style.clean_proceedings %}checked{% endif %}>
+              <label class="form-check-label small" for="clean_proceedings">
+                Clean proceedings names
+              </label>
+              <div class="form-text">Strips "Proceedings of the …" prefix, e.g.
+                "Proceedings of the 40th ICML" → "40th ICML"</div>
+            </div>
+
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" name="use_crossref"
+                     id="use_crossref" value="1" {% if style.use_crossref %}checked{% endif %}>
+              <label class="form-check-label small" for="use_crossref">
+                Use @proceedings + crossref= for conference papers
+              </label>
+              <div class="form-text">Auto-generates shared <code>@proceedings</code> entries
+                and replaces redundant fields in <code>@inproceedings</code> with
+                <code>crossref={key}</code>.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a href="{{ '/bibtex/' + collection.id | string if collection else '/bibtex' }}"
+           class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

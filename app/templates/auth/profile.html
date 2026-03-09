@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center text-white fw-bold"
+       style="width:52px;height:52px;font-size:1.3rem;flex-shrink:0">
+    {{ current_user.username[0].upper() }}
+  </div>
+  <div>
+    <h4 class="mb-0 fw-bold">{{ current_user.username }}</h4>
+    <div class="text-muted small">
+      {{ current_user.email }}
+      {% if current_user.is_admin %}
+      <span class="badge bg-danger ms-2">Admin</span>
+      {% endif %}
+      {% if current_user.author %}
+      · <a href="/authors/{{ current_user.author.id }}" class="text-decoration-none">
+          {{ current_user.author.full_name }}
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-4" style="max-width:720px">
+
+  <!-- Change email -->
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold small">
+        <i class="bi bi-envelope me-1"></i>Change Email
+      </div>
+      <div class="card-body">
+        {% if email_success %}
+        <div class="alert alert-success py-2 small">Email updated successfully.</div>
+        {% endif %}
+        {% if email_error %}
+        <div class="alert alert-danger py-2 small">{{ email_error }}</div>
+        {% endif %}
+        <form method="post" action="/profile/email">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">New Email *</label>
+            <input type="email" name="new_email" class="form-control" required
+                   placeholder="{{ current_user.email }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Current Password *</label>
+            <input type="password" name="current_password" class="form-control"
+                   required autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Update Email</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change password -->
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold small">
+        <i class="bi bi-key me-1"></i>Change Password
+      </div>
+      <div class="card-body">
+        {% if password_success %}
+        <div class="alert alert-success py-2 small">Password updated successfully.</div>
+        {% endif %}
+        {% if password_error %}
+        <div class="alert alert-danger py-2 small">{{ password_error }}</div>
+        {% endif %}
+        <form method="post" action="/profile/password">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Current Password *</label>
+            <input type="password" name="current_password" class="form-control"
+                   required autocomplete="current-password">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">New Password *</label>
+            <input type="password" name="new_password" class="form-control"
+                   required autocomplete="new-password" minlength="8"
+                   placeholder="Min. 8 characters">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Confirm New Password *</label>
+            <input type="password" name="confirm_password" class="form-control"
+                   required autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Update Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Appearance / Theme -->
+<div class="card mt-4" style="max-width:720px" id="appearance">
+  <div class="card-header fw-semibold small">
+    <i class="bi bi-palette me-1"></i>Appearance
+  </div>
+  <div class="card-body">
+
+    {# ── Theme selector ── #}
+    <p class="small fw-semibold mb-2">Theme</p>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      {% for t_id, t_label, t_swatch in [
+          ('light',         'Light',         '#1d3a6e'),
+          ('dark',          'Dark',           '#0a0f1a'),
+          ('solarized',     'Solarized',      '#073642'),
+          ('high-contrast', 'High Contrast',  '#000000'),
+          ('ocean',         'Ocean',          '#0d1b2a'),
+          ('forest',        'Forest',         '#1b2e1b')] %}
+      <button type="button"
+              class="btn btn-sm d-flex align-items-center gap-2
+                     {% if current_user.theme == t_id %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+              onclick="alpacaApplyTheme('{{ t_id }}')">
+        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;
+                     background:{{ t_swatch }};border:2px solid rgba(128,128,128,.35);flex-shrink:0"></span>
+        {{ t_label }}
+      </button>
+      {% endfor %}
+    </div>
+
+    {# ── Customizer ── #}
+    <div class="accordion accordion-flush border rounded" id="customizerAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed py-2 small fw-semibold" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#customizerBody">
+            <i class="bi bi-sliders me-2"></i>Customize further
+          </button>
+        </h2>
+        <div id="customizerBody" class="accordion-collapse collapse">
+          <div class="accordion-body pt-2">
+            <form id="customizer-form" action="/profile/theme" method="post">
+              <input type="hidden" name="theme" id="customizerTheme" value="{{ current_user.theme }}">
+              <div class="row g-3">
+                <div class="col-sm-4">
+                  <label class="form-label small fw-semibold mb-1">Accent color</label>
+                  <input type="color" class="form-control form-control-color w-100"
+                         name="primary" id="cpPrimary"
+                         value="{{ (current_user.theme_custom or {}).get('primary', '#0d6efd') }}">
+                </div>
+                <div class="col-sm-4">
+                  <label class="form-label small fw-semibold mb-1">Page background</label>
+                  <input type="color" class="form-control form-control-color w-100"
+                         name="body_bg" id="cpBodyBg"
+                         value="{{ (current_user.theme_custom or {}).get('body_bg', '#f5f6fa') }}">
+                </div>
+                <div class="col-sm-4">
+                  <label class="form-label small fw-semibold mb-1">Card background</label>
+                  <input type="color" class="form-control form-control-color w-100"
+                         name="card_bg" id="cpCardBg"
+                         value="{{ (current_user.theme_custom or {}).get('card_bg', '#ffffff') }}">
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold mb-1">Font size</label>
+                  <select class="form-select form-select-sm" name="font_size" id="selFontSize">
+                    <option value="sm" {% if (current_user.theme_custom or {}).get('font_size') == 'sm' %}selected{% endif %}>Small</option>
+                    <option value="md" {% if (current_user.theme_custom or {}).get('font_size', 'md') == 'md' %}selected{% endif %}>Normal</option>
+                    <option value="lg" {% if (current_user.theme_custom or {}).get('font_size') == 'lg' %}selected{% endif %}>Large</option>
+                  </select>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold mb-1">Border radius</label>
+                  <select class="form-select form-select-sm" name="radius" id="selRadius">
+                    <option value="none" {% if (current_user.theme_custom or {}).get('radius') == 'none' %}selected{% endif %}>Sharp</option>
+                    <option value="sm"   {% if (current_user.theme_custom or {}).get('radius') == 'sm' %}selected{% endif %}>Small</option>
+                    <option value="md"   {% if (current_user.theme_custom or {}).get('radius', 'md') == 'md' %}selected{% endif %}>Default</option>
+                    <option value="lg"   {% if (current_user.theme_custom or {}).get('radius') == 'lg' %}selected{% endif %}>Rounded</option>
+                  </select>
+                </div>
+              </div>
+              <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary btn-sm">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetCustom">
+                  Reset customizations
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const root = document.documentElement;
+
+  // Live preview for color pickers
+  document.getElementById('cpPrimary').addEventListener('input', e => {
+    root.style.setProperty('--bs-primary', e.target.value);
+    root.style.setProperty('--bs-link-color', e.target.value);
+  });
+  document.getElementById('cpBodyBg').addEventListener('input', e => {
+    root.style.setProperty('--bs-body-bg', e.target.value);
+    root.style.setProperty('--alpaca-body-bg', e.target.value);
+  });
+  document.getElementById('cpCardBg').addEventListener('input', e => {
+    root.style.setProperty('--bs-card-bg', e.target.value);
+  });
+
+  // Live preview for font size
+  document.getElementById('selFontSize').addEventListener('change', e => {
+    const map = { sm: '0.875rem', md: '1rem', lg: '1.0625rem' };
+    root.style.setProperty('--bs-body-font-size', map[e.target.value] || '1rem');
+    root.setAttribute('data-alpaca-font', e.target.value);
+  });
+
+  // Live preview for border radius
+  document.getElementById('selRadius').addEventListener('change', e => {
+    root.setAttribute('data-alpaca-radius', e.target.value);
+  });
+
+  // Keep hidden theme field in sync when alpacaApplyTheme is called from this page
+  const origApply = window.alpacaApplyTheme;
+  window.alpacaApplyTheme = function(theme) {
+    document.getElementById('customizerTheme').value = theme;
+    origApply(theme);
+  };
+
+  // Reset customizations: clear theme_custom, keep theme
+  document.getElementById('btnResetCustom').addEventListener('click', () => {
+    const fd = new FormData();
+    fd.append('theme', document.getElementById('customizerTheme').value);
+    // send with defaults so custom is cleared server-side
+    fetch('/profile/theme', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => { if (d.ok) location.reload(); });
+  });
+
+  // Submit customizer form via fetch for instant feedback
+  document.getElementById('customizer-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    fetch('/profile/theme', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => { if (d.ok) location.reload(); });
+  });
+})();
+</script>
+
+<!-- Author profile claim -->
+<div class="card mt-4" style="max-width:720px">
+  <div class="card-header fw-semibold small">
+    <i class="bi bi-person-badge me-1"></i>Author Profile
+  </div>
+  <div class="card-body">
+    {% if current_user.author %}
+      <div class="d-flex align-items-center gap-3">
+        <i class="bi bi-check-circle-fill text-success fs-4"></i>
+        <div>
+          <div class="fw-semibold">
+            <a href="/authors/{{ current_user.author.id }}" class="text-decoration-none">
+              {{ current_user.author.full_name }}
+            </a>
+          </div>
+          <div class="text-muted small">Your account is linked to this author profile.</div>
+        </div>
+      </div>
+    {% elif pending_claim %}
+      <div class="d-flex align-items-start gap-3">
+        <i class="bi bi-hourglass-split text-warning fs-4"></i>
+        <div class="flex-grow-1">
+          <div class="fw-semibold">Claim pending review</div>
+          <div class="text-muted small">
+            You requested to claim
+            <strong>{{ pending_claim.author.full_name }}</strong>.
+            An admin will review your request.
+          </div>
+          {% if pending_claim.message %}
+          <div class="text-muted small mt-1 fst-italic">"{{ pending_claim.message }}"</div>
+          {% endif %}
+        </div>
+        <form method="post" action="/profile/claim/cancel"
+              onsubmit="return confirm('Cancel this claim request?')">
+          <button class="btn btn-sm btn-outline-secondary">Cancel request</button>
+        </form>
+      </div>
+    {% else %}
+      {% if last_rejected %}
+      <div class="alert alert-warning py-2 small mb-3">
+        Your previous claim for <strong>{{ last_rejected.author.full_name }}</strong>
+        was rejected. You may submit a new request below.
+      </div>
+      {% endif %}
+      <p class="text-muted small mb-3">
+        Select your author profile to link it to this account. Your request will be
+        reviewed by an admin before the link is activated.
+      </p>
+      {% if claimable_authors %}
+      <form method="post" action="/profile/claim">
+        <div class="row g-3">
+          <div class="col-md-7">
+            <label class="form-label small fw-semibold">Author *</label>
+            <select name="author_id" class="form-select" required>
+              <option value="">— Select your author profile —</option>
+              {% for a in claimable_authors %}
+              <option value="{{ a.id }}">{{ a.display_name }}{% if a.email %} · {{ a.email }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label small fw-semibold">Message <span class="text-muted fw-normal">(optional)</span></label>
+            <input type="text" name="message" class="form-control"
+                   placeholder="Why you are claiming this profile…">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm mt-3">Submit Claim Request</button>
+      </form>
+      {% else %}
+      <p class="text-muted small mb-0">All author profiles are already claimed.</p>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -5,9 +5,11 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.routers import (
+    admin,
     auth,
     authors,
     affiliations,
+    bibtex,
     calendar,
     collaborators,
     conferences,
@@ -17,6 +19,11 @@ from app.routers import (
     papers,
     partials,
     scholar,
+    service,
+    suggestions,
+    notebook,
+    wiki,
+    workflows,
 )
 
 app = FastAPI(title="Alpaca", description="Academic Administration, knowLedge base, Paper organization And Collaboration Assistant")
@@ -35,7 +42,9 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── Routers ──────────────────────────────────────────────────────────────────
+app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(bibtex.router)
 app.include_router(calendar.router)
 app.include_router(dashboard.router)
 app.include_router(papers.router)
@@ -46,4 +55,9 @@ app.include_router(affiliations.router)
 app.include_router(groups.router)
 app.include_router(collaborators.router)
 app.include_router(scholar.router)
+app.include_router(service.router)
+app.include_router(suggestions.router)
+app.include_router(notebook.router)
+app.include_router(wiki.router)
+app.include_router(workflows.router)
 app.include_router(partials.router)

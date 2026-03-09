@@ -15,17 +15,28 @@
 <div class="alert alert-info">No collaborators found. Add papers with co-authors to see them here.</div>
 {% else %}
 
-<div class="mb-3 d-flex gap-2">
-  <a href="?view=list" class="btn btn-sm {% if view == 'list' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-    <i class="bi bi-list-ul me-1"></i>List
-  </a>
-  <a href="?view=affiliation" class="btn btn-sm {% if view == 'affiliation' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-    <i class="bi bi-building me-1"></i>By Affiliation
-  </a>
-  <a href="?view=country" class="btn btn-sm {% if view == 'country' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-    <i class="bi bi-globe me-1"></i>By Country
-  </a>
-</div>
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if view == 'list' %}active{% endif %}" href="?view=list">
+      <i class="bi bi-list-ul me-1"></i>List
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if view == 'affiliation' %}active{% endif %}" href="?view=affiliation">
+      <i class="bi bi-building me-1"></i>By Affiliation
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if view == 'country' %}active{% endif %}" href="?view=country">
+      <i class="bi bi-globe me-1"></i>By Country
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if view == 'graph' %}active{% endif %}" href="?view=graph">
+      <i class="bi bi-diagram-3 me-1"></i>Graph
+    </a>
+  </li>
+</ul>
 
 {% if view == 'list' %}
 <div class="card">
@@ -84,7 +95,86 @@
   </div>
 </div>
 {% endfor %}
+
+{% elif view == 'graph' %}
+<div class="card">
+  <div class="card-body p-0">
+    <div id="collab-graph" style="height:600px;width:100%;border-radius:.375rem"></div>
+  </div>
+  <div class="card-footer small text-muted">
+    Node size reflects number of joint papers. Edge thickness reflects number of shared papers among the shown authors.
+    Drag to pan · scroll to zoom · click a node to open the author profile.
+  </div>
+</div>
 {% endif %}
 
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if view == 'graph' and collaborators %}
+<script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/vis-network@9.1.9/dist/dist/vis-network.min.css">
+<script>
+(function () {
+  const rawNodes = {{ graph_nodes_json | safe }};
+  const rawEdges = {{ graph_edges_json | safe }};
+
+  // Compute per-node total joint papers (sum of all its edge weights involving user)
+  const userNodeId = rawNodes.find(n => n.group === 'self')?.id;
+  const userEdgeWeights = {};
+  for (const e of rawEdges) {
+    if (e.from === userNodeId) userEdgeWeights[e.to] = (userEdgeWeights[e.to] || 0) + e.value;
+    if (e.to === userNodeId) userEdgeWeights[e.from] = (userEdgeWeights[e.from] || 0) + e.value;
+  }
+  const maxWeight = Math.max(1, ...Object.values(userEdgeWeights));
+
+  const nodes = new vis.DataSet(rawNodes.map(n => {
+    const w = n.group === 'self' ? maxWeight : (userEdgeWeights[n.id] || 1);
+    const size = n.group === 'self' ? 32 : 14 + Math.round(18 * w / maxWeight);
+    return {
+      id: n.id,
+      label: n.label,
+      size,
+      color: n.group === 'self'
+        ? { background: '#0d6efd', border: '#084298', highlight: { background: '#0a58ca', border: '#052c65' } }
+        : { background: '#6ea8fe', border: '#3d8bcd', highlight: { background: '#0d6efd', border: '#084298' } },
+      font: { color: '#212529', size: n.group === 'self' ? 14 : 12, bold: n.group === 'self' },
+      shape: 'dot',
+      title: n.group === 'self' ? 'You' : `${n.label} — ${w} joint paper${w !== 1 ? 's' : ''}`,
+    };
+  }));
+
+  const maxEdge = Math.max(1, ...rawEdges.map(e => e.value));
+  const edges = new vis.DataSet(rawEdges.map(e => ({
+    from: e.from,
+    to: e.to,
+    value: e.value,
+    width: 1 + Math.round(5 * e.value / maxEdge),
+    title: e.title,
+    color: { color: '#adb5bd', highlight: '#0d6efd', opacity: 0.8 },
+    smooth: { type: 'continuous' },
+  })));
+
+  const container = document.getElementById('collab-graph');
+  const network = new vis.Network(container, { nodes, edges }, {
+    physics: {
+      solver: 'forceAtlas2Based',
+      forceAtlas2Based: { gravitationalConstant: -60, springLength: 120, springConstant: 0.05 },
+      stabilization: { iterations: 200 },
+    },
+    interaction: { hover: true, tooltipDelay: 100 },
+    nodes: { borderWidth: 2 },
+    edges: { hoverWidth: 0.5 },
+  });
+
+  network.on('click', params => {
+    if (params.nodes.length > 0) {
+      const nid = params.nodes[0];
+      if (nid !== userNodeId) window.location.href = `/authors/${nid}`;
+    }
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}

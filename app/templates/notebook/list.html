@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Research Notebook{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-journal-text me-2"></i>Research Notebook</h4>
+  <div class="d-flex gap-2">
+    <a href="/notebook/map" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-diagram-3 me-1"></i>Mind Map
+    </a>
+    <a href="/notebook/shared" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-people me-1"></i>Shared with me
+    </a>
+    <a href="/notebook/new" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New Entry
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  {# ── Tag sidebar ── #}
+  <div class="col-lg-2 col-md-3">
+    <div class="card">
+      <div class="card-body p-2">
+        <div class="small fw-semibold text-muted text-uppercase mb-2 px-1">Tags</div>
+        <a href="/notebook{% if q %}?q={{ q }}{% endif %}"
+           class="d-block rounded px-2 py-1 text-decoration-none small mb-1
+                  {% if not active_tag %}fw-semibold text-primary{% else %}text-body{% endif %}">
+          All entries
+        </a>
+        {% for t in all_tags %}
+        <a href="/notebook?tag={{ t.name }}{% if q %}&q={{ q }}{% endif %}"
+           class="d-block rounded px-2 py-1 text-decoration-none small mb-1
+                  {% if active_tag == t.name %}fw-semibold text-primary bg-primary bg-opacity-10{% else %}text-body{% endif %}">
+          <i class="bi bi-tag me-1 opacity-50"></i>{{ t.name }}
+        </a>
+        {% else %}
+        <div class="text-muted small px-1 fst-italic">No tags yet</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Main content ── #}
+  <div class="col-lg-10 col-md-9">
+    {# Search bar #}
+    <form class="row g-2 mb-3" method="get">
+      {% if active_tag %}<input type="hidden" name="tag" value="{{ active_tag }}">{% endif %}
+      <div class="col">
+        <input class="form-control form-control-sm" name="q" placeholder="Search entries…" value="{{ q }}">
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-sm btn-outline-secondary">Search</button>
+        {% if q or active_tag %}
+        <a href="/notebook" class="btn btn-sm btn-outline-danger ms-1">
+          <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if entries %}
+    <div class="row g-3">
+      {% for entry in entries %}
+      <div class="col-md-6 col-xl-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h6 class="card-title fw-semibold mb-1">
+              <a href="/notebook/{{ entry.id }}" class="text-decoration-none text-body-emphasis">
+                {{ entry.title }}
+              </a>
+            </h6>
+            <p class="card-text text-muted small mb-2"
+               style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">
+              {{ entry.body[:200] if entry.body else '' }}
+            </p>
+
+            {# Tags #}
+            {% if entry.entry_tags %}
+            <div class="mb-2">
+              {% for et in entry.entry_tags %}
+              <a href="/notebook?tag={{ et.tag.name }}"
+                 class="badge bg-secondary text-decoration-none me-1">{{ et.tag.name }}</a>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            {# Links #}
+            {% if entry.paper %}
+            <div class="small text-muted mb-1">
+              <i class="bi bi-file-earmark-text me-1"></i>
+              <a href="/papers/{{ entry.paper.id }}" class="text-decoration-none">{{ entry.paper.title[:40] }}…</a>
+            </div>
+            {% endif %}
+            {% if entry.conference %}
+            <div class="small text-muted mb-1">
+              <i class="bi bi-calendar-event me-1"></i>
+              <a href="/conferences/{{ entry.conference.id }}" class="text-decoration-none">
+                {{ entry.conference.abbreviation }}
+              </a>
+            </div>
+            {% endif %}
+          </div>
+          <div class="card-footer bg-transparent border-0 pt-0 d-flex justify-content-between align-items-center">
+            <span class="text-muted" style="font-size:.75rem">
+              {{ entry.updated_at.strftime('%b %d, %Y') }}
+            </span>
+            <div class="d-flex gap-1 align-items-center">
+              {% if entry.is_shared %}
+              <i class="bi bi-people-fill text-info" title="Shared"></i>
+              {% endif %}
+              <a href="/notebook/{{ entry.id }}/edit" class="btn btn-sm btn-outline-secondary py-0">
+                <i class="bi bi-pencil"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-journal-x fs-1 d-block mb-2 opacity-25"></i>
+      {% if q or active_tag %}
+      No entries match your filter.
+      {% else %}
+      Your notebook is empty. <a href="/notebook/new">Create your first entry.</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

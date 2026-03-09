@@ -8,14 +8,27 @@
   </ol>
 </nav>
 
-<div class="d-flex justify-content-between align-items-start mb-4">
-  <div>
-    <h4 class="fw-bold mb-1">{{ group.name }}</h4>
-    {% if group.parent %}<div class="text-muted small">Subgroup of <a href="/groups/{{ group.parent_group_id }}">{{ group.parent.name }}</a></div>{% endif %}
-    {% if group.description %}<p class="text-muted mt-1">{{ group.description }}</p>{% endif %}
+{# ── Group header ── #}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-3">
+    {% if group.logo_path %}
+    <img src="{{ group.logo_path }}" alt="{{ group.name }} logo"
+         style="max-height:64px;max-width:160px;object-fit:contain">
+    {% endif %}
+    <div>
+      <h4 class="fw-bold mb-0">{{ group.name }}</h4>
+      {% if group.parent %}
+      <div class="text-muted small">Subgroup of
+        <a href="/groups/{{ group.parent_group_id }}">{{ group.parent.name }}</a>
+      </div>
+      {% endif %}
+      {% if group.description %}
+      <p class="text-muted small mt-1 mb-0">{{ group.description }}</p>
+      {% endif %}
+    </div>
   </div>
   {% if is_admin %}
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 flex-shrink-0">
     <a href="/groups/{{ group.id }}/edit" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-pencil me-1"></i>Edit
     </a>
@@ -27,56 +40,100 @@
   {% endif %}
 </div>
 
+{# ── Tabs ── #}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'overview' %}active{% endif %}"
+       href="?tab=overview">
+      <i class="bi bi-info-circle me-1"></i>Overview
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'members' %}active{% endif %}"
+       href="?tab=members">
+      <i class="bi bi-people me-1"></i>Members
+      <span class="badge bg-secondary ms-1">{{ group.memberships | length }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'papers' %}active{% endif %}"
+       href="?tab=papers">
+      <i class="bi bi-file-earmark-text me-1"></i>Papers
+      <span class="badge bg-secondary ms-1">{{ group.paper_shares | length }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'reviews' %}active{% endif %}"
+       href="?tab=reviews">
+      <i class="bi bi-arrow-left-right me-1"></i>Reviews
+      {% set open_count = review_requests | selectattr("status", "equalto", "open") | list | length %}
+      {% if open_count > 0 %}
+      <span class="badge bg-warning text-dark ms-1">{{ open_count }}</span>
+      {% endif %}
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'wiki' %}active{% endif %}"
+       href="?tab=wiki">
+      <i class="bi bi-journal-text me-1"></i>Wiki
+      {% if wiki_pages %}
+      <span class="badge bg-secondary ms-1">{{ wiki_pages | length }}</span>
+      {% endif %}
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'workflows' %}active{% endif %}"
+       href="?tab=workflows">
+      <i class="bi bi-list-check me-1"></i>Workflows
+      {% if group_workflows %}
+      <span class="badge bg-secondary ms-1">{{ group_workflows | length }}</span>
+      {% endif %}
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'bibtex' %}active{% endif %}"
+       href="?tab=bibtex">
+      <i class="bi bi-file-earmark-text me-1"></i>BibTeX
+      {% if group_bibtex %}
+      <span class="badge bg-secondary ms-1">{{ group_bibtex | length }}</span>
+      {% endif %}
+    </a>
+  </li>
+</ul>
+
+{# ══════════════════════ OVERVIEW ══════════════════════ #}
+{% if active_tab == 'overview' %}
 <div class="row g-3">
-  <!-- Members -->
   <div class="col-md-4">
     <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span class="fw-semibold small">Members</span>
-        {% if is_admin %}
-        <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="collapse" data-bs-target="#addMemberForm">
-          <i class="bi bi-plus"></i>
-        </button>
-        {% endif %}
-      </div>
-      {% if is_admin %}
-      <div class="collapse" id="addMemberForm">
-        <div class="card-body border-bottom">
-          <form method="post" action="/groups/{{ group.id }}/members/add">
-            <select name="user_id" class="form-select form-select-sm mb-2" required>
-              <option value="">— select user —</option>
-              {% for u in all_users %}
-              <option value="{{ u.id }}">{{ u.username }}</option>
-              {% endfor %}
-            </select>
-            <select name="role" class="form-select form-select-sm mb-2">
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </select>
-            <button class="btn btn-sm btn-primary w-100">Add</button>
-          </form>
+      <div class="card-body">
+        <h6 class="fw-semibold mb-3">Quick Stats</h6>
+        <div class="d-flex flex-column gap-2">
+          <div class="d-flex justify-content-between small">
+            <span class="text-muted">Members</span>
+            <span class="fw-semibold">{{ group.memberships | length }}</span>
+          </div>
+          <div class="d-flex justify-content-between small">
+            <span class="text-muted">Shared papers</span>
+            <span class="fw-semibold">{{ group.paper_shares | length }}</span>
+          </div>
+          <div class="d-flex justify-content-between small">
+            <span class="text-muted">Wiki pages</span>
+            <span class="fw-semibold">{{ wiki_pages | length }}</span>
+          </div>
+          {% set open_count = review_requests | selectattr("status", "equalto", "open") | list | length %}
+          <div class="d-flex justify-content-between small">
+            <span class="text-muted">Open review requests</span>
+            <span class="fw-semibold">{{ open_count }}</span>
+          </div>
         </div>
       </div>
-      {% endif %}
-      <ul class="list-group list-group-flush">
-        {% for m in group.memberships %}
-        <li class="list-group-item small d-flex justify-content-between align-items-center">
-          <span>
-            {{ m.user.username }}
-            {% if m.role.value == 'admin' %}<span class="badge bg-warning text-dark ms-1">admin</span>{% endif %}
-          </span>
-          {% if is_admin and m.user_id != current_user.id %}
-          <form method="post" action="/groups/{{ group.id }}/members/{{ m.user_id }}/remove">
-            <button class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-x"></i></button>
-          </form>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
     </div>
+  </div>
 
-    {% if group.subgroups %}
-    <div class="card mt-3">
+  {% if group.subgroups %}
+  <div class="col-md-4">
+    <div class="card">
       <div class="card-header fw-semibold small">Subgroups</div>
       <ul class="list-group list-group-flush">
         {% for sg in group.subgroups %}
@@ -86,64 +143,430 @@
         {% endfor %}
       </ul>
     </div>
-    {% endif %}
   </div>
+  {% endif %}
 
-  <!-- Papers feed -->
-  <div class="col-md-8">
+  {% if wiki_pages %}
+  <div class="col-md-4">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <span class="fw-semibold small">Shared Papers</span>
-        {% if is_admin %}
-        <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="collapse" data-bs-target="#addPaperForm">
-          <i class="bi bi-plus"></i>
-        </button>
-        {% endif %}
+        <span class="fw-semibold small">Pinned Wiki Pages</span>
+        <a href="?tab=wiki" class="btn btn-sm btn-outline-secondary py-0">All</a>
       </div>
-      {% if is_admin %}
-      <div class="collapse" id="addPaperForm">
-        <div class="card-body border-bottom">
-          <form method="post" action="/groups/{{ group.id }}/papers/add" class="d-flex gap-2">
-            <select name="paper_id" class="form-select form-select-sm" required>
-              <option value="">— select paper —</option>
-              {% for p in all_papers %}
-              <option value="{{ p.id }}">{{ p.title | truncate(60) }}</option>
+      <ul class="list-group list-group-flush">
+        {% for p in wiki_pages | selectattr("is_pinned") | list %}
+        <li class="list-group-item small">
+          <i class="bi bi-pin-angle-fill text-warning me-1"></i>
+          <a href="/groups/{{ group.id }}/wiki/{{ p.slug }}" class="text-decoration-none">{{ p.title }}</a>
+        </li>
+        {% else %}
+        <li class="list-group-item small text-muted fst-italic">No pinned pages.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{# ══════════════════════ MEMBERS ══════════════════════ #}
+{% elif active_tab == 'members' %}
+<div class="card" style="max-width:600px">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="fw-semibold small">Members</span>
+    {% if is_admin %}
+    <button class="btn btn-sm btn-outline-primary py-0"
+            data-bs-toggle="collapse" data-bs-target="#addMemberForm">
+      <i class="bi bi-plus"></i> Add
+    </button>
+    {% endif %}
+  </div>
+  {% if is_admin %}
+  <div class="collapse" id="addMemberForm">
+    <div class="card-body border-bottom">
+      <form method="post" action="/groups/{{ group.id }}/members/add">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-6">
+            <select name="user_id" class="form-select form-select-sm" required>
+              <option value="">— select user —</option>
+              {% for u in all_users %}
+              <option value="{{ u.id }}">{{ u.username }}</option>
               {% endfor %}
             </select>
-            <button class="btn btn-sm btn-primary">Share</button>
-          </form>
-        </div>
-      </div>
-      {% endif %}
-      <div class="list-group list-group-flush">
-        {% for share in group.paper_shares %}
-        {% set paper = share.paper %}
-        <div class="list-group-item">
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <a href="/papers/{{ paper.id }}" class="fw-semibold text-decoration-none">
-                {{ paper.title | truncate(70) }}
-              </a>
-              <div class="small text-muted">
-                {% for pa in paper.paper_authors[:3] %}{{ pa.author.last_name }}{% if not loop.last %}, {% endif %}{% endfor %}
-                {% if paper.paper_authors|length > 3 %} et al.{% endif %}
-              </div>
-            </div>
-            <div class="d-flex align-items-center gap-1">
-              <span class="badge bg-{{ status_colors[paper.status] }}">{{ status_labels[paper.status] }}</span>
-              {% if is_admin %}
-              <form method="post" action="/groups/{{ group.id }}/papers/{{ paper.id }}/remove">
-                <button class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-x"></i></button>
-              </form>
-              {% endif %}
-            </div>
+          </div>
+          <div class="col-md-3">
+            <select name="role" class="form-select form-select-sm">
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button class="btn btn-sm btn-primary w-100">Add</button>
           </div>
         </div>
-        {% else %}
-        <div class="list-group-item text-muted small">No papers shared with this group yet.</div>
-        {% endfor %}
+      </form>
+    </div>
+  </div>
+  {% endif %}
+  <ul class="list-group list-group-flush">
+    {% for m in group.memberships %}
+    <li class="list-group-item small d-flex justify-content-between align-items-center">
+      <span>
+        {{ m.user.username }}
+        {% if m.role.value == 'admin' %}
+        <span class="badge bg-warning text-dark ms-1">admin</span>
+        {% endif %}
+      </span>
+      {% if is_admin and m.user_id != current_user.id %}
+      <form method="post" action="/groups/{{ group.id }}/members/{{ m.user_id }}/remove">
+        <button class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-x"></i></button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+{# ══════════════════════ PAPERS ══════════════════════ #}
+{% elif active_tab == 'papers' %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="fw-semibold small">Shared Papers</span>
+    {% if is_admin %}
+    <button class="btn btn-sm btn-outline-primary py-0"
+            data-bs-toggle="collapse" data-bs-target="#addPaperForm">
+      <i class="bi bi-plus"></i> Share
+    </button>
+    {% endif %}
+  </div>
+  {% if is_admin %}
+  <div class="collapse" id="addPaperForm">
+    <div class="card-body border-bottom">
+      <form method="post" action="/groups/{{ group.id }}/papers/add" class="d-flex gap-2">
+        <select name="paper_id" class="form-select form-select-sm" required>
+          <option value="">— select paper —</option>
+          {% for p in all_papers %}
+          <option value="{{ p.id }}">{{ p.title | truncate(60) }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-primary flex-shrink-0">Share</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+  <div class="list-group list-group-flush">
+    {% for share in group.paper_shares %}
+    {% set paper = share.paper %}
+    <div class="list-group-item">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <a href="/papers/{{ paper.id }}" class="fw-semibold text-decoration-none">
+            {{ paper.title | truncate(70) }}
+          </a>
+          <div class="small text-muted">
+            {% for pa in paper.paper_authors[:3] %}{{ pa.author.last_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+            {% if paper.paper_authors|length > 3 %} et al.{% endif %}
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+          <span class="badge bg-{{ status_colors[paper.status] }}">{{ status_labels[paper.status] }}</span>
+          {% if is_admin %}
+          <form method="post" action="/groups/{{ group.id }}/papers/{{ paper.id }}/remove">
+            <button class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-x"></i></button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="list-group-item text-muted small">No papers shared with this group yet.</div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ══════════════════════ REVIEWS ══════════════════════ #}
+{% elif active_tab == 'reviews' %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="fw-semibold small"><i class="bi bi-arrow-left-right me-1"></i>Review Exchange</span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-muted">Your balance:</span>
+      <span class="badge {% if my_balance > 0 %}bg-success{% elif my_balance < 0 %}bg-danger{% else %}bg-secondary{% endif %} fs-6">
+        {% if my_balance > 0 %}+{% endif %}{{ my_balance }}
+      </span>
+      <button class="btn btn-sm btn-outline-primary py-0"
+              data-bs-toggle="collapse" data-bs-target="#requestReviewForm">
+        <i class="bi bi-plus"></i> Request Review
+      </button>
+    </div>
+  </div>
+
+  <div class="collapse" id="requestReviewForm">
+    <div class="card-body border-bottom">
+      <form method="post" action="/groups/{{ group.id }}/reviews/request" class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label small fw-semibold mb-1">Paper <span class="text-muted fw-normal">(optional)</span></label>
+          <select name="paper_id" class="form-select form-select-sm">
+            <option value="">— no specific paper —</option>
+            {% for p in all_papers %}
+            <option value="{{ p.id }}">{{ p.title | truncate(60) }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small fw-semibold mb-1">Notes <span class="text-muted fw-normal">(optional)</span></label>
+          <input type="text" name="notes" class="form-control form-control-sm"
+                 placeholder="e.g. Please focus on the related work section">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-sm btn-primary w-100">Submit (−1 pt)</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% set open_reqs = review_requests | selectattr("status", "equalto", "open") | list %}
+  {% set assigned_reqs = review_requests | selectattr("status", "equalto", "assigned") | list %}
+  {% set completed_reqs = review_requests | selectattr("status", "equalto", "completed") | list %}
+
+  <div class="card-body pb-1">
+    <h6 class="small fw-semibold text-muted text-uppercase mb-2">Open Requests</h6>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for req in open_reqs %}
+    <div class="list-group-item">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <span class="fw-semibold small">{{ req.requester.username }}</span>
+          {% if req.paper %}
+          <span class="text-muted small ms-1">— <a href="/papers/{{ req.paper.id }}" class="text-decoration-none">{{ req.paper.title | truncate(50) }}</a></span>
+          {% endif %}
+          {% if req.notes %}<div class="text-muted small fst-italic">{{ req.notes }}</div>{% endif %}
+          <div class="text-muted" style="font-size:.75rem">{{ req.created_at.strftime('%Y-%m-%d') }}</div>
+        </div>
+        <div class="d-flex gap-1">
+          {% if req.requester_id == current_user.id %}
+          <form method="post" action="/groups/{{ group.id }}/reviews/{{ req.id }}/cancel"
+                onsubmit="return confirm('Cancel this request and get your point back?')">
+            <button class="btn btn-sm btn-outline-secondary py-0">Cancel (+1 pt)</button>
+          </form>
+          {% else %}
+          <form method="post" action="/groups/{{ group.id }}/reviews/{{ req.id }}/accept">
+            <button class="btn btn-sm btn-outline-success py-0">Accept</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="list-group-item text-muted small">No open review requests.</div>
+    {% endfor %}
+  </div>
+
+  {% if assigned_reqs %}
+  <div class="card-body pb-1 pt-3">
+    <h6 class="small fw-semibold text-muted text-uppercase mb-2">In Progress</h6>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for req in assigned_reqs %}
+    <div class="list-group-item">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <span class="fw-semibold small">{{ req.requester.username }}</span>
+          <span class="text-muted small ms-1">→ reviewer: <strong>{{ req.assignment.reviewer.username }}</strong></span>
+          {% if req.paper %}
+          <span class="text-muted small ms-1">— <a href="/papers/{{ req.paper.id }}" class="text-decoration-none">{{ req.paper.title | truncate(40) }}</a></span>
+          {% endif %}
+          {% if req.notes %}<div class="text-muted small fst-italic">{{ req.notes }}</div>{% endif %}
+        </div>
+        <div class="d-flex gap-1">
+          {% if req.assignment.reviewer_id == current_user.id %}
+          <form method="post" action="/groups/{{ group.id }}/reviews/{{ req.id }}/complete"
+                onsubmit="return confirm('Mark review as done? You will receive +1 point.')">
+            <button class="btn btn-sm btn-success py-0">Mark Done (+1 pt)</button>
+          </form>
+          {% endif %}
+          {% if req.requester_id == current_user.id %}
+          <form method="post" action="/groups/{{ group.id }}/reviews/{{ req.id }}/cancel"
+                onsubmit="return confirm('Cancel this request and get your point back?')">
+            <button class="btn btn-sm btn-outline-secondary py-0">Cancel (+1 pt)</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if completed_reqs %}
+  <div class="card-body pb-1 pt-3">
+    <h6 class="small fw-semibold text-muted text-uppercase mb-2">Completed</h6>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for req in completed_reqs %}
+    <div class="list-group-item text-muted small">
+      <i class="bi bi-check-circle-fill text-success me-1"></i>
+      <strong>{{ req.assignment.reviewer.username }}</strong> reviewed for
+      <strong>{{ req.requester.username }}</strong>
+      {% if req.paper %}— <a href="/papers/{{ req.paper.id }}" class="text-decoration-none">{{ req.paper.title | truncate(40) }}</a>{% endif %}
+      <span class="ms-2" style="font-size:.7rem">{{ req.assignment.completed_at.strftime('%Y-%m-%d') }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{# ══════════════════════ WIKI ══════════════════════ #}
+{% elif active_tab == 'wiki' %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0 fw-semibold"><i class="bi bi-journal-text me-2"></i>Wiki</h5>
+  <a href="/groups/{{ group.id }}/wiki/new" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Page
+  </a>
+</div>
+
+{% if wiki_pages %}
+<div class="row g-3">
+  {% for page in wiki_pages %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100 {% if page.is_pinned %}border-warning border-opacity-50{% endif %}">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <h6 class="card-title fw-semibold mb-0">
+            <a href="/groups/{{ group.id }}/wiki/{{ page.slug }}" class="text-decoration-none text-body-emphasis">
+              {{ page.title }}
+            </a>
+          </h6>
+          <div class="d-flex gap-1 align-items-center flex-shrink-0 ms-2">
+            {% if page.is_pinned %}
+            <i class="bi bi-pin-angle-fill text-warning" title="Pinned"></i>
+            {% endif %}
+            {% if page.locked_by_other(current_user.id) %}
+            <span class="badge bg-warning text-dark" title="Locked by {{ page.locked_by.username }}">
+              <i class="bi bi-lock-fill"></i>
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        <p class="card-text text-muted small mb-0"
+           style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">
+          {{ page.body[:200] if page.body else '' }}
+        </p>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 d-flex justify-content-between align-items-center">
+        <span class="text-muted" style="font-size:.75rem">
+          {{ page.updated_at.strftime('%b %d, %Y') }}
+        </span>
+        <a href="/groups/{{ group.id }}/wiki/{{ page.slug }}" class="btn btn-sm btn-outline-secondary py-0">
+          Open
+        </a>
       </div>
     </div>
   </div>
+  {% endfor %}
 </div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-journal-x fs-1 d-block mb-2 opacity-25"></i>
+  No wiki pages yet.
+  <a href="/groups/{{ group.id }}/wiki/new">Create the first page.</a>
+</div>
+{% endif %}
+
+{% elif active_tab == 'workflows' %}
+{# ══════════════════════ WORKFLOWS ══════════════════════ #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0 fw-semibold"><i class="bi bi-list-check me-2"></i>Workflows shared with this group</h5>
+  <a href="/workflows" class="btn btn-sm btn-outline-secondary">Manage workflows</a>
+</div>
+
+{% if group_workflows %}
+<div class="row g-3">
+  {% for wf in group_workflows %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <h6 class="fw-semibold mb-0">
+            <a href="/workflows/{{ wf.id }}" class="text-decoration-none">{{ wf.name }}</a>
+          </h6>
+          {% if wf.is_public %}
+          <span class="badge bg-success-subtle text-success border border-success-subtle">Public</span>
+          {% endif %}
+        </div>
+        {% if wf.description %}
+        <p class="text-muted small mb-2">{{ wf.description | truncate(100) }}</p>
+        {% endif %}
+        {% if wf.owner %}
+        <div class="text-muted small mb-2"><i class="bi bi-person me-1"></i>{{ wf.owner.username }}</div>
+        {% endif %}
+        <div class="d-flex gap-2 text-muted" style="font-size:0.78rem">
+          <span><i class="bi bi-check2-square me-1"></i>{{ wf.steps | length }} step{{ 's' if wf.steps | length != 1 }}</span>
+          <span><i class="bi bi-lightning me-1"></i>{{ wf.triggers | length }} trigger{{ 's' if wf.triggers | length != 1 }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-list-check fs-1 d-block mb-2 opacity-25"></i>
+  No workflows shared with this group yet.
+  <a href="/workflows">Share one from the Workflows page.</a>
+</div>
+{% endif %}
+
+{% elif active_tab == 'bibtex' %}
+{# ══════════════════════ BIBTEX ══════════════════════ #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0 fw-semibold"><i class="bi bi-file-earmark-text me-2"></i>BibTeX Collections</h5>
+  <div class="d-flex gap-2">
+    {% if is_admin %}
+    <a href="/bibtex/new?group_id={{ group.id }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-lg me-1"></i>New Collection
+    </a>
+    {% endif %}
+    <a href="/bibtex" class="btn btn-sm btn-outline-secondary">All collections</a>
+  </div>
+</div>
+
+{% if group_bibtex %}
+<div class="row g-3">
+  {% for col in group_bibtex %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="fw-semibold mb-1">
+          <a href="/bibtex/{{ col.id }}" class="text-decoration-none">{{ col.name }}</a>
+        </h6>
+        {% if col.description %}
+        <p class="text-muted small mb-2">{{ col.description | truncate(80) }}</p>
+        {% endif %}
+        {% if col.owner %}
+        <div class="text-muted small mb-2"><i class="bi bi-person me-1"></i>{{ col.owner.username }}</div>
+        {% endif %}
+        <div class="d-flex gap-2 align-items-center mt-2">
+          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+            {{ col.entries | length }} entries
+          </span>
+          <a href="/bibtex/{{ col.id }}/export" class="btn btn-xs btn-outline-secondary ms-auto"
+             title="Download .bib">
+            <i class="bi bi-download me-1"></i>.bib
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-file-earmark-text fs-1 d-block mb-2 opacity-25"></i>
+  No BibTeX collections shared with this group yet.
+  <a href="/bibtex">Share one from the BibTeX page.</a>
+</div>
+{% endif %}
+
+{% endif %}
 {% endblock %}

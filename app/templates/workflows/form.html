@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if workflow else 'New' }} Workflow{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/workflows">Workflows</a></li>
+    {% if workflow %}
+    <li class="breadcrumb-item"><a href="/workflows/{{ workflow.id }}">{{ workflow.name }}</a></li>
+    {% endif %}
+    <li class="breadcrumb-item active">{{ 'Edit' if workflow else 'New' }}</li>
+  </ol>
+</nav>
+
+<div class="card" style="max-width:600px">
+  <div class="card-body">
+    <h5 class="fw-bold mb-4">{{ 'Edit Workflow' if workflow else 'New Workflow' }}</h5>
+    <form method="post" action="{{ action }}">
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Name *</label>
+        <input type="text" name="name" class="form-control" required
+               value="{{ workflow.name if workflow else '' }}"
+               placeholder="e.g. Submission Checklist">
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Description</label>
+        <textarea name="description" class="form-control" rows="3"
+                  placeholder="Briefly describe when and how to use this workflow.">{{ workflow.description or '' if workflow else '' }}</textarea>
+      </div>
+      <div class="mb-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_public" id="isPublic" value="1"
+                 {% if workflow and workflow.is_public %}checked{% endif %}>
+          <label class="form-check-label small" for="isPublic">
+            Make public (visible to all users)
+          </label>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a href="{{ '/workflows/' ~ workflow.id if workflow else '/workflows' }}"
+           class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum as PyEnum
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -22,6 +22,13 @@ class PaperResourceType(str, PyEnum):
     file = "file"
     overleaf = "overleaf"
     github = "github"
+
+
+class MilestoneType(str, PyEnum):
+    internal_deadline = "internal_deadline"
+    submission = "submission"
+    review = "review"
+    other = "other"
 
 
 class PaperStatus(str, PyEnum):
@@ -85,6 +92,7 @@ class PaperProject(Base):
     overleaf_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     github_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     google_scholar_paper_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    published_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -118,6 +126,13 @@ class PaperProject(Base):
     change_log: Mapped[list["PaperChangeLog"]] = relationship(
         "PaperChangeLog", back_populates="paper", cascade="all, delete-orphan",
         order_by="PaperChangeLog.created_at",
+    )
+    milestones: Mapped[list["PaperMilestone"]] = relationship(
+        "PaperMilestone", back_populates="paper", cascade="all, delete-orphan",
+        order_by="PaperMilestone.due_date",
+    )
+    workflow_subscriptions: Mapped[list["PaperWorkflowSubscription"]] = relationship(
+        "PaperWorkflowSubscription", back_populates="paper", cascade="all, delete-orphan"
     )
 
 
@@ -208,12 +223,48 @@ class TodoItem(Base):
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[TodoStatus] = mapped_column(Enum(TodoStatus), default=TodoStatus.open, nullable=False)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     assigned_to: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    source_workflow_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("workflows.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    blocked_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("todo_items.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     paper: Mapped["PaperProject"] = relationship("PaperProject", back_populates="todos")
     assigned_user: Mapped[Optional["User"]] = relationship("User", back_populates="todos_assigned")
+    source_workflow: Mapped[Optional["Workflow"]] = relationship(
+        "Workflow", foreign_keys=[source_workflow_id]
+    )
+    blocked_by: Mapped[Optional["TodoItem"]] = relationship(
+        "TodoItem", foreign_keys="[TodoItem.blocked_by_id]", remote_side="[TodoItem.id]", uselist=False
+    )
+
+
+MILESTONE_TYPE_LABELS = {
+    MilestoneType.internal_deadline: "Internal Deadline",
+    MilestoneType.submission: "Submission Target",
+    MilestoneType.review: "Review Deadline",
+    MilestoneType.other: "Other",
+}
+
+
+class PaperMilestone(Base):
+    __tablename__ = "paper_milestones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("paper_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    milestone_type: Mapped[MilestoneType] = mapped_column(Enum(MilestoneType), default=MilestoneType.internal_deadline, nullable=False)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    paper: Mapped["PaperProject"] = relationship("PaperProject", back_populates="milestones")
 
 
 class PaperResource(Base):

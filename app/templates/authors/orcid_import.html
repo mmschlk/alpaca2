@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}ORCID Import — {{ author.display_name }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/authors">Authors</a></li>
+    <li class="breadcrumb-item"><a href="/authors/{{ author.id }}">{{ author.display_name }}</a></li>
+    <li class="breadcrumb-item active">ORCID Import</li>
+  </ol>
+</nav>
+
+<h5 class="fw-bold mb-4">
+  <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" style="width:18px;height:18px;vertical-align:middle" class="me-2" alt="ORCID">
+  Import from ORCID — {{ author.full_name }}
+</h5>
+
+{% if phase == "fetch" %}
+{# ── Step 1: enter ORCID ──────────────────────────────────────────────────── #}
+<div class="card" style="max-width:480px">
+  <div class="card-body">
+    {% if error %}
+    <div class="alert alert-danger small py-2">{{ error }}</div>
+    {% endif %}
+    <p class="small text-muted mb-3">
+      Enter an ORCID iD to fetch employment history, publications, and peer-review records.
+      You will be able to review and select which items to import.
+    </p>
+    <form method="post" action="/authors/{{ author.id }}/orcid-import/fetch">
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">ORCID iD</label>
+        <input type="text" name="orcid" class="form-control" required
+               value="{{ author.orcid or '' }}"
+               placeholder="0000-0002-1825-0097"
+               pattern="[\dX]{4}-[\dX]{4}-[\dX]{4}-[\dX]{4}|[\dX]{16}"
+               title="16-digit ORCID (with or without dashes)">
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-cloud-download me-1"></i>Fetch ORCID Record
+        </button>
+        <a href="/authors/{{ author.id }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% else %}
+{# ── Step 2: preview & apply ──────────────────────────────────────────────── #}
+
+{% if record.error %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-1"></i>{{ record.error }}
+  <a href="/authors/{{ author.id }}/orcid-import" class="btn btn-sm btn-outline-secondary ms-3">Try again</a>
+</div>
+{% else %}
+
+<div class="alert alert-info small py-2 mb-3">
+  <i class="bi bi-info-circle me-1"></i>
+  Fetched record for <strong>{{ record.display_name }}</strong> ({{ record.orcid }}).
+  Check the items you want to import, adjust matches as needed, then click <strong>Apply Import</strong>.
+</div>
+
+<form method="post" action="/authors/{{ author.id }}/orcid-import/apply">
+  <input type="hidden" name="orcid" value="{{ record.orcid }}">
+
+  {# ── Tabs ── #}
+  <ul class="nav nav-tabs mb-3" id="orcidTabs" role="tablist">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-aff" type="button">
+        Affiliations
+        <span class="badge bg-secondary ms-1">{{ record.employments | length }}</span>
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-works" type="button">
+        Publications
+        <span class="badge bg-secondary ms-1">{{ record.works | length }}</span>
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reviews" type="button">
+        Review Services
+        <span class="badge bg-secondary ms-1">{{ record.reviews | length }}</span>
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    {# ── Affiliations tab ── #}
+    <div class="tab-pane fade show active" id="tab-aff">
+      {% if record.employments %}
+      <div class="list-group mb-3">
+        {% for emp in record.employments %}
+        {% set i = loop.index0 %}
+        <div class="list-group-item py-2">
+          <div class="d-flex align-items-start gap-3">
+            <div class="pt-1">
+              <input class="form-check-input" type="checkbox" name="emp_{{ i }}_import" value="1"
+                     id="emp{{ i }}" checked>
+            </div>
+            <div class="flex-grow-1">
+              <label class="fw-semibold small mb-1" for="emp{{ i }}">
+                {{ emp.org_name }}
+                {% if emp.country %}<span class="text-muted fw-normal">({{ emp.country }})</span>{% endif %}
+              </label>
+              <div class="text-muted small mb-2">
+                {% if emp.role %}{{ emp.role }} · {% endif %}
+                {{ emp.start_year or '?' }}–{{ emp.end_year or 'present' }}
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <label class="form-label small mb-0 text-nowrap">Map to:</label>
+                <select name="emp_{{ i }}_affiliation_id" class="form-select form-select-sm">
+                  {% if aff_matches[i] %}
+                  {% for aff_id, aff_name, score in aff_matches[i] %}
+                  <option value="{{ aff_id }}" {% if loop.first %}selected{% endif %}>
+                    {{ aff_name }} ({{ "%.0f"|format(score * 100) }}% match)
+                  </option>
+                  {% endfor %}
+                  <option value="new">+ Create new affiliation</option>
+                  <option value="skip">— skip —</option>
+                  {% else %}
+                  <option value="new" selected>+ Create new affiliation "{{ emp.org_name }}"</option>
+                  <option value="skip">— skip —</option>
+                  {% endif %}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted small">No employment records found in this ORCID profile.</p>
+      {% endif %}
+    </div>
+
+    {# ── Publications tab ── #}
+    <div class="tab-pane fade" id="tab-works">
+      {% if record.works %}
+      <p class="small text-muted mb-2">
+        <i class="bi bi-info-circle me-1"></i>
+        Selected publications will be created as paper projects with your authorship.
+        Already-imported titles are pre-unchecked.
+      </p>
+      <div class="list-group mb-3">
+        {% for work in record.works %}
+        {% set i = loop.index0 %}
+        {% set already = work.title.lower() in existing_papers %}
+        <div class="list-group-item py-2 {% if already %}list-group-item-secondary{% endif %}">
+          <div class="d-flex align-items-start gap-3">
+            <div class="pt-1">
+              <input class="form-check-input" type="checkbox" name="work_{{ i }}_import" value="1"
+                     id="work{{ i }}" {% if not already %}checked{% endif %}>
+            </div>
+            <label class="flex-grow-1" for="work{{ i }}">
+              <div class="small fw-semibold">{{ work.title }}</div>
+              <div class="text-muted small">
+                {% if work.work_type %}
+                <span class="badge bg-light text-dark border me-1" style="font-size:.65rem">{{ work.work_type | replace('_', ' ') | title }}</span>
+                {% endif %}
+                {% if work.year %}{{ work.year }}{% endif %}
+                {% if work.journal_name %} · {{ work.journal_name }}{% endif %}
+                {% if work.doi %} · <a href="https://doi.org/{{ work.doi }}" target="_blank" class="text-muted">doi:{{ work.doi }}</a>{% endif %}
+              </div>
+              {% if already %}
+              <div class="text-muted small fst-italic">Already in Alpaca</div>
+              {% endif %}
+            </label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted small">No works found in this ORCID profile.</p>
+      {% endif %}
+    </div>
+
+    {# ── Review Services tab ── #}
+    <div class="tab-pane fade" id="tab-reviews">
+      {% if not author.user %}
+      <div class="alert alert-warning small">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        This author is not linked to a user account. Review services can only be imported for authors with a linked account.
+      </div>
+      {% endif %}
+      {% if record.reviews %}
+      <div class="list-group mb-3">
+        {% for rev in record.reviews %}
+        {% set i = loop.index0 %}
+        {% set matches = rev_matches[i] %}
+        <div class="list-group-item py-2 {% if not author.user %}opacity-50{% endif %}">
+          <div class="d-flex align-items-start gap-3">
+            <div class="pt-1">
+              <input class="form-check-input" type="checkbox" name="rev_{{ i }}_import" value="1"
+                     id="rev{{ i }}" {% if not author.user %}disabled{% endif %} checked>
+            </div>
+            <div class="flex-grow-1">
+              <label class="fw-semibold small mb-1" for="rev{{ i }}">
+                {{ rev.venue_name }}
+              </label>
+              <div class="text-muted small mb-2">
+                {{ rev.year or '?' }}
+              </div>
+              <div class="row g-2">
+                <div class="col-sm-7">
+                  <label class="form-label small mb-1">Map to venue:</label>
+                  <select name="rev_{{ i }}_venue_id" class="form-select form-select-sm"
+                          {% if not author.user %}disabled{% endif %}>
+                    <option value="skip">— skip —</option>
+                    {% if matches.conference %}
+                    <optgroup label="Conferences">
+                      {% for c_id, c_name, score in matches.conference %}
+                      <option value="c_{{ c_id }}" {% if loop.first and score >= 0.50 %}selected{% endif %}>
+                        {{ c_name }} ({{ "%.0f"|format(score * 100) }}%)
+                      </option>
+                      {% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    {% if matches.journal %}
+                    <optgroup label="Journals">
+                      {% for j_id, j_name, score in matches.journal %}
+                      <option value="j_{{ j_id }}" {% if not matches.conference and loop.first and score >= 0.50 %}selected{% endif %}>
+                        {{ j_name }} ({{ "%.0f"|format(score * 100) }}%)
+                      </option>
+                      {% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    <optgroup label="Create new">
+                      <option value="new_c">+ New conference "{{ rev.venue_name }}"</option>
+                      <option value="new_j">+ New journal "{{ rev.venue_name }}"</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <div class="col-sm-5">
+                  <label class="form-label small mb-1">Role:</label>
+                  <select name="rev_{{ i }}_role" class="form-select form-select-sm"
+                          {% if not author.user %}disabled{% endif %}>
+                    {% for role in service_roles %}
+                    <option value="{{ role.value }}"
+                            {% if role.value == rev.role or role.value == (rev.role | replace(' ', '_')) %}selected{% endif %}>
+                      {{ role.value | replace('_', ' ') | title }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted small">No peer-review records found in this ORCID profile.</p>
+      {% endif %}
+    </div>
+
+  </div>{# /tab-content #}
+
+  <div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-success">
+      <i class="bi bi-check2-circle me-1"></i>Apply Import
+    </button>
+    <a href="/authors/{{ author.id }}/orcid-import" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-counterclockwise me-1"></i>Re-fetch
+    </a>
+    <a href="/authors/{{ author.id }}" class="btn btn-outline-secondary ms-auto">Cancel</a>
+  </div>
+</form>
+
+{% endif %}{# /record.error #}
+{% endif %}{# /phase #}
+{% endblock %}

@@ -42,7 +42,7 @@
             {% else %}—{% endfor %}
           </td>
           <td>{{ author.nationality or '—' }}</td>
-          <td>{{ author.paper_authors | length }}</td>
+          <td>{{ visible_paper_counts[author.id] }}</td>
           <td>
             {% if author.google_scholar_id %}
             <a href="https://scholar.google.com/citations?user={{ author.google_scholar_id }}"

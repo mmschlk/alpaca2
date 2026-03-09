@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Edit Entry — {{ entry.cite_key }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/bibtex">BibTeX</a></li>
+    <li class="breadcrumb-item"><a href="/bibtex/{{ collection.id }}">{{ collection.name }}</a></li>
+    <li class="breadcrumb-item active">Edit {{ entry.cite_key }}</li>
+  </ol>
+</nav>
+
+<h5 class="fw-bold mb-3">Edit BibTeX Entry</h5>
+
+{# ── Tabs ── #}
+<ul class="nav nav-tabs mb-3" id="entryTabs">
+  <li class="nav-item">
+    <a class="nav-link active" id="formTab" href="#" onclick="switchTab('form');return false">
+      <i class="bi bi-ui-checks me-1"></i>Form
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" id="rawTab" href="#" onclick="switchTab('raw');return false">
+      <i class="bi bi-code me-1"></i>Raw BibTeX
+    </a>
+  </li>
+</ul>
+
+{# ── Form mode ── #}
+<div id="formPane">
+  <form method="post" action="{{ action }}" id="formForm">
+    <input type="hidden" name="mode" value="form">
+    <div class="card" style="max-width:720px">
+      <div class="card-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">Entry type</label>
+            <select name="entry_type" class="form-select form-select-sm">
+              {% for t in ['article','inproceedings','proceedings','book','incollection','phdthesis','mastersthesis','techreport','misc'] %}
+              <option value="{{ t }}" {% if entry.entry_type == t %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold">Cite key *</label>
+            <input type="text" name="cite_key" class="form-control form-control-sm font-monospace"
+                   required value="{{ entry.cite_key }}">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">Title</label>
+            <input type="text" name="title" class="form-control form-control-sm"
+                   value="{{ entry.title or '' }}">
+          </div>
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold">Authors (BibTeX format)</label>
+            <input type="text" name="authors_raw" class="form-control form-control-sm"
+                   placeholder="Last, First and Last, First"
+                   value="{{ entry.authors_raw or '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">Year</label>
+            <input type="number" name="year" class="form-control form-control-sm"
+                   min="1000" max="2100" value="{{ entry.year or '' }}">
+          </div>
+        </div>
+
+        <div class="border-top pt-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small fw-semibold">Additional fields</span>
+            <button type="button" class="btn btn-xs btn-outline-secondary" onclick="addField()">
+              <i class="bi bi-plus me-1"></i>Add field
+            </button>
+          </div>
+          <div id="extraFields">
+            {% for k, v in (entry.fields_json or {}).items() %}
+            <div class="row g-2 mb-1 extra-field-row">
+              <div class="col-md-3">
+                <input type="text" name="field_key" class="form-control form-control-sm font-monospace"
+                       placeholder="field" value="{{ k }}">
+              </div>
+              <div class="col">
+                <input type="text" name="field_val" class="form-control form-control-sm"
+                       placeholder="value" value="{{ v }}">
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-xs btn-outline-danger"
+                        onclick="this.closest('.extra-field-row').remove()">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          <a href="/bibtex/{{ collection.id }}?tab=entries" class="btn btn-outline-secondary btn-sm">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+{# ── Raw BibTeX mode ── #}
+<div id="rawPane" style="display:none">
+  <form method="post" action="{{ action }}" id="rawForm">
+    <input type="hidden" name="mode" value="raw">
+    <div class="card" style="max-width:720px">
+      <div class="card-body">
+        <p class="small text-muted mb-2">
+          Edit the raw BibTeX. On save, the entry will be re-parsed.
+          The cite key must be unique within this collection.
+        </p>
+        <textarea name="raw_bib" class="form-control font-monospace" rows="16">{{ raw_bib }}</textarea>
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          <a href="/bibtex/{{ collection.id }}?tab=entries" class="btn btn-outline-secondary btn-sm">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function switchTab(mode) {
+  document.getElementById('formPane').style.display = mode === 'form' ? '' : 'none';
+  document.getElementById('rawPane').style.display = mode === 'raw' ? '' : 'none';
+  document.getElementById('formTab').classList.toggle('active', mode === 'form');
+  document.getElementById('rawTab').classList.toggle('active', mode === 'raw');
+}
+
+function addField() {
+  const container = document.getElementById('extraFields');
+  const row = document.createElement('div');
+  row.className = 'row g-2 mb-1 extra-field-row';
+  row.innerHTML = `
+    <div class="col-md-3">
+      <input type="text" name="field_key" class="form-control form-control-sm font-monospace" placeholder="field">
+    </div>
+    <div class="col">
+      <input type="text" name="field_val" class="form-control form-control-sm" placeholder="value">
+    </div>
+    <div class="col-auto">
+      <button type="button" class="btn btn-xs btn-outline-danger"
+              onclick="this.closest('.extra-field-row').remove()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>`;
+  container.appendChild(row);
+  row.querySelector('input').focus();
+}
+</script>
+{% endblock %}

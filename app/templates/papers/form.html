@@ -33,10 +33,22 @@
       </div>
       <div class="mb-3">
         <label class="form-label small fw-semibold">Authors</label>
-        <input type="text" name="authors_raw" class="form-control"
-               value="{{ author_str or '' }}"
-               placeholder="Doe, John; Smith, Jane Marie; Brown, Bob">
-        <div class="form-text">Semicolon-separated: <code>Last, Given; Last2, Given2</code>. Existing authors are matched by name.</div>
+        {# Hidden input carries the semicolon-separated value the server expects #}
+        <input type="hidden" name="authors_raw" id="authorsRaw" value="{{ author_str or '' }}">
+
+        {# Chip container #}
+        <div id="authorChips" class="d-flex flex-wrap gap-1 mb-1"
+             style="min-height:2rem"></div>
+
+        {# Autocomplete input #}
+        <div class="position-relative">
+          <input type="text" id="authorInput" class="form-control" autocomplete="off"
+                 placeholder="Type a name to search, or enter Last, Given and press Enter">
+          <ul id="authorDropdown"
+              class="dropdown-menu w-100 py-1"
+              style="display:none;max-height:220px;overflow-y:auto;top:100%;left:0;z-index:1055"></ul>
+        </div>
+        <div class="form-text">Select from known authors or type <code>Last, Given</code> and press <kbd>Enter</kbd> to add a new one.</div>
       </div>
       <div class="row g-3">
         <div class="col-md-6">
@@ -55,6 +67,12 @@
                  value="{{ paper.google_scholar_paper_id or '' if paper else '' }}"
                  placeholder="e.g. u-x6o8ySG0sC">
         </div>
+        <div class="col-md-6" id="publishedDateRow"
+             style="{{ 'display:none' if not paper or paper.status.value != 'published' else '' }}">
+          <label class="form-label small fw-semibold">Publication Date</label>
+          <input type="date" name="published_date" class="form-control"
+                 value="{{ paper.published_date.isoformat() if paper and paper.published_date else '' }}">
+        </div>
       </div>
       <div class="d-flex gap-2 mt-4">
         <button type="submit" class="btn btn-primary">Save</button>
@@ -63,4 +81,182 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  // All known authors from the server
+  const KNOWN = [
+    {% for a in (all_authors or []) -%}
+    { last: {{ a.last_name | tojson }}, given: {{ a.given_name | tojson }}, label: {{ (a.last_name ~ ', ' ~ a.given_name) | tojson }} },
+    {% endfor %}
+  ];
+
+  const hiddenInput   = document.getElementById('authorsRaw');
+  const chipContainer = document.getElementById('authorChips');
+  const searchInput   = document.getElementById('authorInput');
+  const dropdown      = document.getElementById('authorDropdown');
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const selected = [];   // [{ label: "Last, Given" }, …]
+
+  // Pre-populate from existing value (edit mode)
+  const initial = hiddenInput.value.trim();
+  if (initial) {
+    initial.split(';').forEach(part => {
+      const t = part.trim();
+      if (t) addAuthor(t, false);
+    });
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  function syncHidden() {
+    hiddenInput.value = selected.map(a => a.label).join('; ');
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function addAuthor(label, focus = true) {
+    if (selected.some(a => a.label.toLowerCase() === label.toLowerCase())) return;
+    selected.push({ label });
+    syncHidden();
+    renderChips();
+    if (focus) {
+      searchInput.value = '';
+      closeDropdown();
+      searchInput.focus();
+    }
+  }
+
+  function removeAuthor(label) {
+    const idx = selected.findIndex(a => a.label === label);
+    if (idx !== -1) selected.splice(idx, 1);
+    syncHidden();
+    renderChips();
+  }
+
+  // ── Drag-and-drop state ──────────────────────────────────────────────────────
+  let dragSrcIdx = null;
+
+  function renderChips() {
+    chipContainer.innerHTML = '';
+    selected.forEach(({ label }, idx) => {
+      const chip = document.createElement('span');
+      chip.className = 'author-chip';
+      chip.draggable = true;
+      chip.dataset.idx = idx;
+      chip.style.cursor = 'grab';
+      chip.innerHTML = `<i class="bi bi-grip-vertical me-1 text-muted" style="font-size:0.7rem;cursor:grab"></i>${escHtml(label)}<button type="button" class="btn-close ms-1"
+        aria-label="Remove" style="font-size:0.5rem;vertical-align:middle"></button>`;
+      chip.querySelector('.btn-close').addEventListener('click', () => removeAuthor(label));
+
+      chip.addEventListener('dragstart', e => {
+        dragSrcIdx = idx;
+        chip.style.opacity = '0.45';
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      chip.addEventListener('dragend', () => {
+        chip.style.opacity = '';
+        chipContainer.querySelectorAll('.author-chip').forEach(c => c.classList.remove('drag-over'));
+      });
+      chip.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        chipContainer.querySelectorAll('.author-chip').forEach(c => c.classList.remove('drag-over'));
+        chip.classList.add('drag-over');
+      });
+      chip.addEventListener('drop', e => {
+        e.preventDefault();
+        const destIdx = parseInt(chip.dataset.idx, 10);
+        if (dragSrcIdx === null || dragSrcIdx === destIdx) return;
+        const [moved] = selected.splice(dragSrcIdx, 1);
+        selected.splice(destIdx, 0, moved);
+        dragSrcIdx = null;
+        syncHidden();
+        renderChips();
+      });
+
+      chipContainer.appendChild(chip);
+    });
+  }
+
+  // ── Dropdown ────────────────────────────────────────────────────────────────
+  function openDropdown(items) {
+    dropdown.innerHTML = '';
+    items.forEach(item => {
+      const li = document.createElement('li');
+      const a  = document.createElement('a');
+      a.className = 'dropdown-item small py-1';
+      a.href = '#';
+      a.textContent = item.label;
+      a.addEventListener('mousedown', e => {
+        e.preventDefault();
+        addAuthor(item.label);
+      });
+      li.appendChild(a);
+      dropdown.appendChild(li);
+    });
+    dropdown.style.display = items.length ? 'block' : 'none';
+  }
+
+  function closeDropdown() {
+    dropdown.style.display = 'none';
+    dropdown.querySelectorAll('.active').forEach(el => el.classList.remove('active'));
+  }
+
+  function navigateDropdown(dir) {
+    const items = [...dropdown.querySelectorAll('.dropdown-item')];
+    if (!items.length) return;
+    const cur = dropdown.querySelector('.active');
+    let idx = cur ? items.indexOf(cur) + dir : (dir === 1 ? 0 : items.length - 1);
+    idx = Math.max(0, Math.min(items.length - 1, idx));
+    items.forEach(i => i.classList.remove('active'));
+    items[idx].classList.add('active');
+    items[idx].scrollIntoView({ block: 'nearest' });
+  }
+
+  // ── Input events ─────────────────────────────────────────────────────────────
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (!q) { closeDropdown(); return; }
+    const matches = KNOWN.filter(a =>
+      a.label.toLowerCase().includes(q) ||
+      a.given.toLowerCase().startsWith(q) ||
+      a.last.toLowerCase().startsWith(q)
+    ).slice(0, 12);
+    openDropdown(matches);
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const active = dropdown.querySelector('.dropdown-item.active');
+      if (active) { active.dispatchEvent(new MouseEvent('mousedown')); return; }
+      const raw = searchInput.value.trim();
+      if (raw) addAuthor(raw);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault(); navigateDropdown(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault(); navigateDropdown(-1);
+    } else if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  });
+
+  searchInput.addEventListener('blur', () => setTimeout(closeDropdown, 150));
+})();
+
+// Show/hide Publication Date based on status
+(function () {
+  const statusSel = document.querySelector('select[name="status"]');
+  const dateRow   = document.getElementById('publishedDateRow');
+  function toggle() {
+    dateRow.style.display = statusSel.value === 'published' ? '' : 'none';
+  }
+  statusSel.addEventListener('change', toggle);
+})();
+</script>
 {% endblock %}

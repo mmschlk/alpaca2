@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}DBLP Import — {{ author.display_name }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/authors">Authors</a></li>
+    <li class="breadcrumb-item"><a href="/authors/{{ author.id }}">{{ author.display_name }}</a></li>
+    <li class="breadcrumb-item active">DBLP Import</li>
+  </ol>
+</nav>
+
+<h5 class="fw-bold mb-4">
+  <i class="bi bi-journal-bookmark me-2" style="color:#003366"></i>
+  Import from DBLP — {{ author.full_name }}
+</h5>
+
+{% if error %}
+<div class="alert alert-danger small py-2 mb-3">
+  <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+</div>
+{% endif %}
+
+{% if phase == "search" %}
+{# ── Step 1: search / URL input ─────────────────────────────────────────────── #}
+<div class="card" style="max-width:520px">
+  <div class="card-body">
+    <p class="small text-muted mb-3">
+      Enter a DBLP profile URL (e.g. <code>https://dblp.org/pid/l/LeCun:Yann</code>) or search by author name.
+      You will be able to review and select which publications to import, and link co-authors to existing Alpaca profiles.
+    </p>
+    <form method="post" action="/authors/{{ author.id }}/dblp-import/search">
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">DBLP Profile URL or Name</label>
+        <input type="text" name="query" class="form-control" required autofocus
+               value="{{ author.dblp_pid and 'https://dblp.org/pid/' ~ author.dblp_pid or '' }}"
+               placeholder="https://dblp.org/pid/… or First Last">
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-search me-1"></i>Search DBLP
+        </button>
+        <a href="/authors/{{ author.id }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% elif phase == "select" %}
+{# ── Step 2: multiple authors found — pick one ──────────────────────────────── #}
+<div class="card" style="max-width:640px">
+  <div class="card-header fw-semibold small">
+    <i class="bi bi-people me-1"></i>Multiple DBLP profiles found — select the correct one
+  </div>
+  <div class="list-group list-group-flush">
+    {% for hit in author_hits %}
+    <div class="list-group-item py-2">
+      <form method="post" action="/authors/{{ author.id }}/dblp-import/search" class="d-flex align-items-center gap-3">
+        <input type="hidden" name="pid" value="{{ hit.pid }}">
+        <input type="hidden" name="dblp_name" value="{{ hit.name }}">
+        <div class="flex-grow-1">
+          <div class="fw-semibold small">{{ hit.name }}</div>
+          {% if hit.aliases %}
+          <div class="text-muted" style="font-size:.75rem">
+            also known as: {{ hit.aliases | join(", ") }}
+          </div>
+          {% endif %}
+          <div class="text-muted" style="font-size:.7rem">
+            <a href="{{ hit.url }}" target="_blank" class="text-muted">{{ hit.url }}</a>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">
+          Select <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="card-footer bg-transparent">
+    <a href="/authors/{{ author.id }}/dblp-import" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-counterclockwise me-1"></i>Search again
+    </a>
+  </div>
+</div>
+
+{% elif phase == "preview" %}
+{# ── Step 3: preview publications and co-authors ────────────────────────────── #}
+<div class="alert alert-info small py-2 mb-3">
+  <i class="bi bi-info-circle me-1"></i>
+  Fetched <strong>{{ works | length }}</strong> publication{{ 's' if works | length != 1 else '' }}
+  for <strong>{{ dblp_name }}</strong>.
+  {% if dblp_pid_val %}
+  <a href="https://dblp.org/pid/{{ dblp_pid_val }}" target="_blank" class="ms-1 text-muted">
+    <i class="bi bi-box-arrow-up-right"></i> DBLP profile
+  </a>
+  {% endif %}
+</div>
+
+<form method="post" action="/authors/{{ author.id }}/dblp-import/apply">
+  <input type="hidden" name="dblp_name" value="{{ dblp_name }}">
+  <input type="hidden" name="dblp_pid" value="{{ dblp_pid_val }}">
+
+  <div class="d-flex justify-content-end gap-2 mb-2">
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="selectAll">Select all</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="selectNone">Select none</button>
+    <button type="submit" class="btn btn-sm btn-success ms-2">
+      <i class="bi bi-check2-circle me-1"></i>Apply Import
+    </button>
+  </div>
+
+  {% if not works %}
+  <div class="alert alert-warning small">No publications returned from DBLP for this author.</div>
+  {% else %}
+  <div class="list-group mb-3" id="worksList">
+    {% for work in works %}
+    {% set i = loop.index0 %}
+    {% set already = work.title.lower() in existing_papers %}
+    <div class="list-group-item py-2 {% if already %}list-group-item-secondary{% endif %}">
+      <div class="d-flex align-items-start gap-3">
+        <div class="pt-1">
+          <input class="form-check-input work-check" type="checkbox"
+                 name="work_{{ i }}_import" value="1"
+                 id="work{{ i }}" {% if not already %}checked{% endif %}>
+        </div>
+        <label class="flex-grow-1" for="work{{ i }}">
+          <div class="small fw-semibold">{{ work.title }}</div>
+          <div class="text-muted small">
+            {% if work.work_type == "conference" %}
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1" style="font-size:.65rem">Conference</span>
+            {% elif work.work_type == "journal" %}
+            <span class="badge bg-success-subtle text-success border border-success-subtle me-1" style="font-size:.65rem">Journal</span>
+            {% else %}
+            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle me-1" style="font-size:.65rem">Other</span>
+            {% endif %}
+            {% if work.year %}{{ work.year }}{% endif %}
+            {% if work.venue %} · <span class="fw-medium">{{ work.venue }}</span>{% endif %}
+            {% if work.doi %} · <a href="https://doi.org/{{ work.doi }}" target="_blank" class="text-muted">doi:{{ work.doi }}</a>{% endif %}
+          </div>
+          {% if already %}
+          <div class="text-muted small fst-italic mt-1">Already in Alpaca — skipped</div>
+          {% endif %}
+          {# ── Co-authors ── #}
+          {% if work.co_authors %}
+          <div class="mt-2 ps-1 border-start border-2 border-light">
+            <div class="text-muted small fw-semibold mb-1">Co-authors:</div>
+            {% for ca in work.co_authors %}
+            {% set j = loop.index0 %}
+            {% set ca_matches = coauthor_matches.get(ca.name, []) %}
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="small text-nowrap" style="min-width:140px;max-width:200px;overflow:hidden;text-overflow:ellipsis"
+                    title="{{ ca.name }}">{{ ca.name }}</span>
+              <select name="coauthor_{{ i }}_{{ j }}" class="form-select form-select-sm py-0"
+                      style="max-width:260px;font-size:.8rem">
+                <option value="0">— skip —</option>
+                {% for ca_id, ca_full_name, score in ca_matches %}
+                <option value="{{ ca_id }}" {% if loop.first and score >= 0.65 %}selected{% endif %}>
+                  {{ ca_full_name }} ({{ "%.0f"|format(score * 100) }}%)
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </label>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-success">
+      <i class="bi bi-check2-circle me-1"></i>Apply Import
+    </button>
+    <a href="/authors/{{ author.id }}/dblp-import" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-counterclockwise me-1"></i>Search again
+    </a>
+    <a href="/authors/{{ author.id }}" class="btn btn-outline-secondary ms-auto">Cancel</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if phase == "preview" %}
+<script>
+document.getElementById('selectAll')?.addEventListener('click', () => {
+  document.querySelectorAll('.work-check').forEach(cb => cb.checked = true);
+});
+document.getElementById('selectNone')?.addEventListener('click', () => {
+  document.querySelectorAll('.work-check').forEach(cb => cb.checked = false);
+});
+</script>
+{% endif %}
+{% endblock %}

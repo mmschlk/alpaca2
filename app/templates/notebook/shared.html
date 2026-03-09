@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Shared Notebook Entries{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-people me-2"></i>Shared with Me</h4>
+  <a href="/notebook" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>My Notebook
+  </a>
+</div>
+
+{% if entries %}
+<div class="row g-3">
+  {% for entry in entries %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100 shadow-sm border-info border-opacity-25">
+      <div class="card-body">
+        <h6 class="card-title fw-semibold mb-1">
+          <a href="/notebook/{{ entry.id }}" class="text-decoration-none text-body-emphasis">
+            {{ entry.title }}
+          </a>
+        </h6>
+        <p class="card-text text-muted small mb-2"
+           style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">
+          {{ entry.body[:200] if entry.body else '' }}
+        </p>
+        {% if entry.entry_tags %}
+        <div class="mb-2">
+          {% for et in entry.entry_tags %}
+          <span class="badge bg-secondary me-1">{{ et.tag.name }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 d-flex justify-content-between align-items-center">
+        <span class="text-muted small">
+          <i class="bi bi-person me-1"></i>{{ entry.user.username }}
+          · {{ entry.updated_at.strftime('%b %d, %Y') }}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-inbox fs-1 d-block mb-2 opacity-25"></i>
+  No entries have been shared with you yet.
+</div>
+{% endif %}
+{% endblock %}

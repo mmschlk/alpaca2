@@ -16,16 +16,42 @@
     <div class="card">
       <div class="card-body">
         <div class="d-flex justify-content-between">
-          <div>
-            <h4 class="fw-bold mb-1">{{ author.full_name }}</h4>
-            {% if author.email %}
-            <a href="mailto:{{ author.email }}" class="text-muted small">
-              <i class="bi bi-envelope me-1"></i>{{ author.email }}
-            </a>
+          <div class="d-flex align-items-center gap-3">
+            {% if author.photo_path %}
+            <img src="{{ author.photo_path }}" alt="{{ author.full_name }}"
+                 style="width:80px;height:80px;object-fit:cover;border-radius:50%;border:3px solid #dee2e6;flex-shrink:0">
             {% endif %}
-            {% if author.nationality %}
-            <div class="text-muted small mt-1"><i class="bi bi-flag me-1"></i>{{ author.nationality }}</div>
-            {% endif %}
+            <div>
+              <h4 class="fw-bold mb-1">{{ author.full_name }}</h4>
+              {% if author.email %}
+              <a href="mailto:{{ author.email }}" class="text-muted small">
+                <i class="bi bi-envelope me-1"></i>{{ author.email }}
+              </a>
+              {% endif %}
+              {% if author.nationality %}
+              <div class="text-muted small mt-1"><i class="bi bi-flag me-1"></i>{{ author.nationality }}</div>
+              {% endif %}
+              {% if author.orcid %}
+              <div class="mt-1">
+                <a href="https://orcid.org/{{ author.orcid }}" target="_blank"
+                   class="badge text-decoration-none"
+                   style="background:#a6ce39;color:#fff;font-weight:500;font-size:.75rem">
+                  <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png"
+                       style="width:13px;height:13px;vertical-align:middle" class="me-1" alt="ORCID">
+                  {{ author.orcid }}
+                </a>
+              </div>
+              {% endif %}
+              {% if author.dblp_pid %}
+              <div class="mt-1">
+                <a href="https://dblp.org/pid/{{ author.dblp_pid }}" target="_blank"
+                   class="badge text-decoration-none"
+                   style="background:#003366;color:#ffcc00;font-weight:500;font-size:.75rem">
+                  dblp: {{ author.dblp_pid }}
+                </a>
+              </div>
+              {% endif %}
+            </div>
           </div>
           <div class="d-flex gap-2 align-items-start">
             {% if author.google_scholar_id %}
@@ -33,7 +59,20 @@
                target="_blank" class="btn btn-sm btn-outline-secondary">
               <i class="bi bi-mortarboard me-1"></i>Scholar
             </a>
+            <a href="/scholar/import?author_id={{ author.id }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-cloud-download me-1"></i>Import Papers
+            </a>
             {% endif %}
+            <a href="/authors/{{ author.id }}/orcid-import" class="btn btn-sm btn-outline-success">
+              <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png"
+                   style="width:14px;height:14px;vertical-align:middle" class="me-1" alt="ORCID">
+              {% if author.orcid %}Re-import ORCID{% else %}Import from ORCID{% endif %}
+            </a>
+            <a href="/authors/{{ author.id }}/dblp-import" class="btn btn-sm btn-outline-secondary"
+               style="color:#003366;border-color:#003366">
+              <i class="bi bi-journal-bookmark me-1"></i>
+              {% if author.dblp_pid %}Re-import DBLP{% else %}Import from DBLP{% endif %}
+            </a>
             <a href="/authors/{{ author.id }}/edit" class="btn btn-sm btn-outline-secondary">
               <i class="bi bi-pencil me-1"></i>Edit
             </a>
@@ -121,9 +160,9 @@
 </div>
 {% endif %}
 
-<h5 class="fw-semibold mb-3">Papers ({{ author.paper_authors | length }})</h5>
-<div class="list-group">
-  {% for pa in author.paper_authors %}
+<h5 class="fw-semibold mb-3">Papers ({{ visible_paper_authors | length }})</h5>
+<div class="list-group mb-4">
+  {% for pa in visible_paper_authors %}
   <a href="/papers/{{ pa.paper.id }}" class="list-group-item list-group-item-action small">
     {{ pa.paper.title }}
   </a>
@@ -131,6 +170,20 @@
   <div class="text-muted small">No papers yet.</div>
   {% endfor %}
 </div>
+
+{% if visible_paper_authors %}
+<div class="card">
+  <div class="card-header fw-semibold small">
+    <i class="bi bi-diagram-3 me-1"></i>Collaboration Graph
+  </div>
+  <div class="card-body p-0">
+    <div id="author-collab-graph" style="height:500px;width:100%;border-radius:0 0 .375rem .375rem"></div>
+  </div>
+  <div class="card-footer small text-muted">
+    Node size reflects number of joint visible papers. Click a collaborator node to open their profile.
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -153,6 +206,66 @@ new Chart(document.getElementById('citChart'), {
   },
   options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { maxTicksLimit: 10 } } } }
 });
+</script>
+{% endif %}
+{% if visible_paper_authors %}
+<script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/vis-network@9.1.9/dist/dist/vis-network.min.css">
+<script>
+(function () {
+  const rawNodes = {{ graph_nodes_json | safe }};
+  const rawEdges = {{ graph_edges_json | safe }};
+  const centerNodeId = rawNodes.find(n => n.group === 'self')?.id;
+  const centerEdgeWeights = {};
+  for (const e of rawEdges) {
+    if (e.from === centerNodeId) centerEdgeWeights[e.to] = (centerEdgeWeights[e.to] || 0) + e.value;
+    if (e.to === centerNodeId) centerEdgeWeights[e.from] = (centerEdgeWeights[e.from] || 0) + e.value;
+  }
+  const maxWeight = Math.max(1, ...Object.values(centerEdgeWeights));
+  const nodes = new vis.DataSet(rawNodes.map(n => {
+    const w = n.group === 'self' ? maxWeight : (centerEdgeWeights[n.id] || 1);
+    const size = n.group === 'self' ? 32 : 14 + Math.round(18 * w / maxWeight);
+    return {
+      id: n.id,
+      label: n.label,
+      size,
+      color: n.group === 'self'
+        ? { background: '#0d6efd', border: '#084298', highlight: { background: '#0a58ca', border: '#052c65' } }
+        : { background: '#6ea8fe', border: '#3d8bcd', highlight: { background: '#0d6efd', border: '#084298' } },
+      font: { color: '#212529', size: n.group === 'self' ? 14 : 12, bold: n.group === 'self' },
+      shape: 'dot',
+      title: n.group === 'self' ? n.label : `${n.label} — ${w} joint paper${w !== 1 ? 's' : ''}`,
+    };
+  }));
+  const maxEdge = Math.max(1, ...rawEdges.map(e => e.value));
+  const edges = new vis.DataSet(rawEdges.map(e => ({
+    from: e.from, to: e.to, value: e.value,
+    width: 1 + Math.round(5 * e.value / maxEdge),
+    title: e.title,
+    color: { color: '#adb5bd', highlight: '#0d6efd', opacity: 0.8 },
+    smooth: { type: 'continuous' },
+  })));
+  const network = new vis.Network(
+    document.getElementById('author-collab-graph'),
+    { nodes, edges },
+    {
+      physics: {
+        solver: 'forceAtlas2Based',
+        forceAtlas2Based: { gravitationalConstant: -60, springLength: 120, springConstant: 0.05 },
+        stabilization: { iterations: 200 },
+      },
+      interaction: { hover: true, tooltipDelay: 100 },
+      nodes: { borderWidth: 2 },
+      edges: { hoverWidth: 0.5 },
+    }
+  );
+  network.on('click', params => {
+    if (params.nodes.length > 0) {
+      const nid = params.nodes[0];
+      if (nid !== centerNodeId) window.location.href = `/authors/${nid}`;
+    }
+  });
+})();
 </script>
 {% endif %}
 {% endblock %}

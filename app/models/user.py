@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -16,6 +16,9 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_moderator: Mapped[bool] = mapped_column(Boolean, default=False)
+    theme: Mapped[str] = mapped_column(String(32), server_default="light")
+    theme_custom: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     author_id: Mapped[Optional[int]] = mapped_column(ForeignKey("authors.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -29,4 +32,25 @@ class User(Base):
     )
     calendar_events: Mapped[list["PersonalCalendarEvent"]] = relationship(
         "PersonalCalendarEvent", back_populates="user"
+    )
+    claim_requests: Mapped[list["AuthorClaimRequest"]] = relationship(
+        "AuthorClaimRequest", foreign_keys="AuthorClaimRequest.user_id", back_populates="user"
+    )
+    service_records: Mapped[list["ServiceRecord"]] = relationship(
+        "ServiceRecord", back_populates="user", cascade="all, delete-orphan"
+    )
+    review_balances: Mapped[list["GroupReviewBalance"]] = relationship(
+        "GroupReviewBalance", back_populates="user", cascade="all, delete-orphan"
+    )
+    review_requests_made: Mapped[list["GroupReviewRequest"]] = relationship(
+        "GroupReviewRequest", foreign_keys="GroupReviewRequest.requester_id", back_populates="requester"
+    )
+    review_assignments: Mapped[list["GroupReviewAssignment"]] = relationship(
+        "GroupReviewAssignment", foreign_keys="GroupReviewAssignment.reviewer_id", back_populates="reviewer"
+    )
+    workflows_owned: Mapped[list["Workflow"]] = relationship(
+        "Workflow", back_populates="owner", cascade="all, delete-orphan"
+    )
+    personal_todos: Mapped[list["PersonalTodo"]] = relationship(
+        "PersonalTodo", back_populates="user", cascade="all, delete-orphan"
     )

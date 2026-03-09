@@ -8,25 +8,49 @@
   </a>
 </div>
 
-<form class="row g-2 mb-3" method="get">
-  <div class="col-md-5">
-    <input class="form-control form-control-sm" name="q" placeholder="Search by title…" value="{{ q }}">
-  </div>
-  <div class="col-md-3">
-    <select name="status" class="form-select form-select-sm">
-      <option value="">All statuses</option>
-      {% for s in all_statuses %}
-      <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>
-        {{ status_labels[s] }}
-      </option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-auto">
-    <button class="btn btn-sm btn-outline-secondary">Filter</button>
-  </div>
+{# Search box #}
+<form class="mb-3 d-flex gap-2" method="get" style="max-width:420px">
+  {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  <input class="form-control form-control-sm" name="q" placeholder="Search by title…" value="{{ q }}">
+  <button class="btn btn-sm btn-outline-secondary">Search</button>
+  {% if q %}<a href="/papers{% if status %}?status={{ status }}{% endif %}" class="btn btn-sm btn-outline-secondary">✕</a>{% endif %}
 </form>
 
+{# Status tabs #}
+{% set tab_labels = {
+  'planned':        'Planned',
+  'wip':            'WIP',
+  'submitted':      'Submitted',
+  'under_review':   'Under Review',
+  'major_revision': 'Maj. Revision',
+  'minor_revision': 'Min. Revision',
+  'accepted':       'Accepted',
+  'published':      'Published',
+  'rejected':       'Rejected',
+} %}
+<ul class="nav nav-tabs mb-3" style="overflow-x:auto;flex-wrap:nowrap">
+  <li class="nav-item flex-shrink-0">
+    <a class="nav-link {% if not status %}active{% endif %}"
+       href="/papers{% if q %}?q={{ q }}{% endif %}">
+      All
+      <span class="badge bg-secondary ms-1">{{ counts_by_status.values() | sum }}</span>
+    </a>
+  </li>
+  {% for s in all_statuses %}
+  {% set cnt = counts_by_status.get(s.value, 0) %}
+  <li class="nav-item flex-shrink-0">
+    <a class="nav-link {% if status == s.value %}active{% endif %} {% if cnt == 0 %}text-muted{% endif %}"
+       href="/papers?status={{ s.value }}{% if q %}&q={{ q }}{% endif %}">
+      {{ tab_labels[s.value] }}
+      {% if cnt > 0 %}
+      <span class="badge bg-{{ status_colors[s] }} ms-1">{{ cnt }}</span>
+      {% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{# Paper cards #}
 <div class="row g-3">
   {% for paper in papers %}
   <div class="col-12">
@@ -52,9 +76,27 @@
             {% endif %}
           </div>
           <div class="d-flex flex-column align-items-end gap-1">
-            <span class="badge bg-{{ status_colors[paper.status] }}">
-              {{ status_labels[paper.status] }}
-            </span>
+            <div class="dropdown">
+              <button class="btn btn-sm badge bg-{{ status_colors[paper.status] }} dropdown-toggle fw-normal"
+                      type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                      title="Change status">
+                {{ status_labels[paper.status] }}
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                {% for s in all_statuses %}
+                <li>
+                  <form method="post" action="/papers/{{ paper.id }}/status">
+                    <input type="hidden" name="status" value="{{ s.value }}">
+                    <button type="submit" class="dropdown-item d-flex align-items-center gap-2
+                            {% if s == paper.status %}active{% endif %}">
+                      <span class="badge bg-{{ status_colors[s] }}" style="min-width:8px;height:8px;padding:0;border-radius:50%"></span>
+                      {{ status_labels[s] }}
+                    </button>
+                  </form>
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
             <div class="d-flex gap-1 mt-1">
               {% if paper.overleaf_url %}
               <a href="{{ paper.overleaf_url }}" target="_blank" class="btn btn-sm btn-outline-success py-0 px-1" title="Overleaf">
@@ -74,7 +116,7 @@
   </div>
   {% else %}
   <div class="col-12 text-muted text-center py-5">
-    No papers found. <a href="/papers/new">Create one</a>.
+    {% if status or q %}No papers match the current filter.{% else %}No papers yet. <a href="/papers/new">Create one</a>.{% endif %}
   </div>
   {% endfor %}
 </div>

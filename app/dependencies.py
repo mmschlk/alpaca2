@@ -46,6 +46,18 @@ async def require_admin(
     return user
 
 
+async def require_moderator(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Allow admins and moderators."""
+    user = await require_user(request, db)
+    if not (user.is_admin or user.is_moderator):
+        raise HTTPException(status_code=302, headers={"Location": "/"})
+    return user
+
+
 CurrentUser = Annotated[Optional[object], Depends(get_current_user)]
 RequireUser = Annotated[object, Depends(require_user)]
 RequireAdmin = Annotated[object, Depends(require_admin)]
+RequireModerator = Annotated[object, Depends(require_moderator)]

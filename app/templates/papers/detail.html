@@ -70,10 +70,49 @@
         </div>
       </div>
       <div class="d-flex flex-column align-items-end gap-2 flex-shrink-0">
-        <span class="badge bg-{{ status_colors[paper.status] }} fs-6">
-          {{ status_labels[paper.status] }}
-        </span>
-        <div class="d-flex gap-1">
+        <div class="dropdown">
+          <button class="btn btn-sm badge bg-{{ status_colors[paper.status] }} dropdown-toggle fs-6 fw-normal"
+                  type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                  title="Change status">
+            {{ status_labels[paper.status] }}
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            {% for s in all_statuses %}
+            <li>
+              <form method="post" action="/papers/{{ paper.id }}/status">
+                <input type="hidden" name="status" value="{{ s.value }}">
+                <button type="submit" class="dropdown-item d-flex align-items-center gap-2
+                        {% if s == paper.status %}active{% endif %}">
+                  <span class="badge bg-{{ status_colors[s] }}" style="min-width:8px;height:8px;padding:0;border-radius:50%"></span>
+                  {{ status_labels[s] }}
+                </button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% if paper.published_date %}
+        <div class="text-muted small text-end">
+          <i class="bi bi-calendar-check me-1"></i>Published {{ paper.published_date.strftime('%b %d, %Y') }}
+        </div>
+        {% endif %}
+        <div class="d-flex gap-1 flex-wrap">
+          {% if visible_workflows %}
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+              <i class="bi bi-list-check me-1"></i>Apply workflow
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" style="max-height:260px;overflow-y:auto">
+              {% for wf in visible_workflows %}
+              <li>
+                <form method="post" action="/workflows/{{ wf.id }}/apply/paper/{{ paper.id }}">
+                  <button class="dropdown-item small py-1">{{ wf.name }}</button>
+                </form>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
           <a href="/papers/{{ paper.id }}/edit" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-pencil me-1"></i>Edit
           </a>
@@ -136,6 +175,19 @@
                     <option value="{{ u.id }}">{{ u.username }}</option>
                     {% endfor %}
                   </select>
+                  <input type="date" name="due_date" class="form-control form-control-sm" title="Due date">
+                </div>
+                {% if paper.todos %}
+                <div class="mt-2">
+                  <select name="blocked_by_id" class="form-select form-select-sm">
+                    <option value="">Not blocked by anything</option>
+                    {% for t in paper.todos %}
+                    <option value="{{ t.id }}">↳ blocked by: {{ t.title | truncate(40) }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                {% endif %}
+                <div class="mt-2">
                   <button class="btn btn-sm btn-primary">Add</button>
                 </div>
               </form>
@@ -143,14 +195,34 @@
           </div>
           <ul class="list-group list-group-flush">
             {% for todo in paper.todos %}
-            <li class="list-group-item small">
+            <li class="list-group-item small {% if todo.blocked_by and todo.blocked_by.status.value != 'done' %}list-group-item-warning{% endif %}">
               <div class="d-flex justify-content-between align-items-start gap-2">
                 <div>
                   <span class="{% if todo.status.value == 'done' %}text-decoration-line-through text-muted{% endif %}">
                     {{ todo.title }}
                   </span>
+                  {% if todo.source_workflow %}
+                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
+                        style="font-size:0.65rem;font-weight:normal">
+                    <i class="bi bi-list-check"></i> {{ todo.source_workflow.name | truncate(20) }}
+                  </span>
+                  {% endif %}
                   {% if todo.assigned_user %}
                   <span class="text-muted ms-1">→ {{ todo.assigned_user.username }}</span>
+                  {% endif %}
+                  {% if todo.due_date %}
+                  <span class="ms-1 small {% if todo.due_date < today %}text-danger{% else %}text-muted{% endif %}">
+                    <i class="bi bi-calendar3"></i> {{ todo.due_date.strftime('%b %-d') }}
+                  </span>
+                  {% endif %}
+                  {% if todo.blocked_by %}
+                  <div class="text-warning-emphasis" style="font-size:.72rem">
+                    <i class="bi bi-slash-circle me-1"></i>blocked by:
+                    <em>{{ todo.blocked_by.title }}</em>
+                    {% if todo.blocked_by.status.value == 'done' %}
+                    <span class="text-success">(done)</span>
+                    {% endif %}
+                  </div>
                   {% endif %}
                   {% if todo.description %}
                   <div class="text-muted" style="font-size:.75rem">{{ todo.description }}</div>
@@ -172,6 +244,115 @@
             </li>
             {% else %}
             <li class="list-group-item text-muted small">No todos.</li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <!-- Workflow subscriptions -->
+        <div class="card mb-3" id="workflows">
+          <div class="card-header fw-semibold small">
+            <i class="bi bi-list-check me-1"></i>Workflow Subscriptions
+            <span class="badge bg-secondary ms-1">{{ paper.workflow_subscriptions | length }}</span>
+          </div>
+          {% if paper.workflow_subscriptions %}
+          <ul class="list-group list-group-flush">
+            {% for sub in paper.workflow_subscriptions %}
+            <li class="list-group-item small d-flex justify-content-between align-items-center py-1 px-3">
+              <a href="/workflows/{{ sub.workflow.id }}" class="text-decoration-none">
+                {{ sub.workflow.name }}
+              </a>
+              <form method="post" action="/papers/{{ paper.id }}/workflow-subscriptions/{{ sub.workflow_id }}/delete">
+                <button class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-x"></i></button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          {% if visible_workflows %}
+          <div class="card-footer bg-transparent">
+            <form method="post" action="/papers/{{ paper.id }}/workflow-subscriptions" class="d-flex gap-2">
+              <select name="workflow_id" class="form-select form-select-sm flex-grow-1">
+                {% for wf in visible_workflows %}
+                {% if wf.id not in subscribed_wf_ids %}
+                <option value="{{ wf.id }}">{{ wf.name }}</option>
+                {% endif %}
+                {% endfor %}
+              </select>
+              <button class="btn btn-sm btn-outline-primary text-nowrap">
+                <i class="bi bi-plus-lg me-1"></i>Subscribe
+              </button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Milestones -->
+        <div class="card mb-3" id="milestones">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-semibold small"><i class="bi bi-flag me-1"></i>Milestones</span>
+            <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="collapse" data-bs-target="#addMilestoneForm">
+              <i class="bi bi-plus"></i>
+            </button>
+          </div>
+          <div class="collapse" id="addMilestoneForm">
+            <div class="card-body border-bottom">
+              <form method="post" action="/papers/{{ paper.id }}/milestones">
+                <div class="mb-2">
+                  <input type="text" name="title" class="form-control form-control-sm" placeholder="Milestone title…" required>
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <select name="milestone_type" class="form-select form-select-sm">
+                      {% for mt in milestone_types %}
+                      <option value="{{ mt.value }}">{{ milestone_type_labels[mt] }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-6">
+                    <input type="date" name="due_date" class="form-control form-control-sm" required>
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <input type="text" name="description" class="form-control form-control-sm" placeholder="Notes (optional)">
+                </div>
+                <button class="btn btn-sm btn-primary">Add Milestone</button>
+              </form>
+            </div>
+          </div>
+          <ul class="list-group list-group-flush">
+            {% for m in paper.milestones %}
+            <li class="list-group-item small {% if m.is_done %}bg-light{% endif %}">
+              <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="flex-grow-1">
+                  <span class="{% if m.is_done %}text-decoration-line-through text-muted{% endif %} fw-semibold">
+                    {{ m.title }}
+                  </span>
+                  <span class="badge bg-secondary ms-1" style="font-size:.65rem">{{ milestone_type_labels[m.milestone_type] }}</span>
+                  <div class="text-nowrap mt-1">
+                    <span class="{% if not m.is_done and m.due_date < today %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                      <i class="bi bi-calendar3 me-1"></i>{{ m.due_date.strftime('%Y-%m-%d') }}
+                      {% if not m.is_done and m.due_date < today %}<i class="bi bi-exclamation-circle ms-1"></i>{% endif %}
+                    </span>
+                  </div>
+                  {% if m.description %}
+                  <div class="text-muted" style="font-size:.75rem">{{ m.description }}</div>
+                  {% endif %}
+                </div>
+                <div class="d-flex gap-1 align-items-center text-nowrap">
+                  <form method="post" action="/papers/{{ paper.id }}/milestones/{{ m.id }}/toggle">
+                    <button class="btn btn-sm {% if m.is_done %}btn-success{% else %}btn-outline-secondary{% endif %} py-0 px-1" title="{% if m.is_done %}Mark open{% else %}Mark done{% endif %}">
+                      <i class="bi bi-check-lg"></i>
+                    </button>
+                  </form>
+                  <form method="post" action="/papers/{{ paper.id }}/milestones/{{ m.id }}/delete"
+                        onsubmit="return confirm('Delete this milestone?')">
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-x"></i></button>
+                  </form>
+                </div>
+              </div>
+            </li>
+            {% else %}
+            <li class="list-group-item text-muted small">No milestones.</li>
             {% endfor %}
           </ul>
         </div>

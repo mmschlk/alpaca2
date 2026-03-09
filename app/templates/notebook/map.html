@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Notebook Mind Map{% endblock %}
+{% block extra_head %}
+<style>
+  #map-canvas {
+    width: 100%;
+    height: calc(100vh - 57px);
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+  }
+  #map-toolbar {
+    position: absolute;
+    top: 74px;
+    left: 1.5rem;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+  }
+  #edge-label-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.4);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #edge-label-modal.show { display: flex; }
+</style>
+{% endblock %}
+{% block content %}
+<div style="position:relative">
+  <div id="map-toolbar">
+    <a href="/notebook" class="btn btn-sm btn-light border shadow-sm">
+      <i class="bi bi-arrow-left me-1"></i>List
+    </a>
+    <button id="btnFit" class="btn btn-sm btn-light border shadow-sm" title="Fit view">
+      <i class="bi bi-fullscreen"></i>
+    </button>
+    <button id="btnConnect" class="btn btn-sm btn-light border shadow-sm" title="Draw connection">
+      <i class="bi bi-share me-1"></i>Connect
+    </button>
+    <button id="btnPhysics" class="btn btn-sm btn-light border shadow-sm" title="Toggle layout">
+      <i class="bi bi-arrows-move me-1"></i>Auto-layout
+    </button>
+  </div>
+  <div id="map-canvas"></div>
+</div>
+
+{# Edge label prompt modal #}
+<div id="edge-label-modal">
+  <div class="card shadow" style="min-width:320px">
+    <div class="card-body">
+      <h6 class="fw-semibold mb-3">Label for this connection <span class="text-muted fw-normal">(optional)</span></h6>
+      <input type="text" id="edgeLabelInput" class="form-control mb-3" placeholder="e.g. extends, contradicts…">
+      <div class="d-flex gap-2">
+        <button id="btnConfirmEdge" class="btn btn-primary btn-sm">Create</button>
+        <button id="btnCancelEdge" class="btn btn-outline-secondary btn-sm">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script>
+const RAW_NODES = {{ nodes_json | safe }};
+const RAW_EDGES = {{ edges_json | safe }};
+
+// ── Build dataset ────────────────────────────────────────────────────────────
+const nodesDS = new vis.DataSet(RAW_NODES.map(n => ({
+  id: n.id,
+  label: n.label,
+  x: n.x != null ? n.x : undefined,
+  y: n.y != null ? n.y : undefined,
+  physics: n.physics,
+  shape: "box",
+  font: { size: 13 },
+  color: { background: "#dbeafe", border: "#3b82f6", highlight: { background: "#bfdbfe", border: "#1d4ed8" } },
+  widthConstraint: { maximum: 180 },
+})));
+
+const edgesDS = new vis.DataSet(RAW_EDGES.map(e => ({
+  id: e.id,
+  from: e.from,
+  to: e.to,
+  label: e.label || "",
+  arrows: "to",
+  font: { size: 11, align: "middle" },
+  color: { color: "#6b7280" },
+})));
+
+// ── Network ──────────────────────────────────────────────────────────────────
+const container = document.getElementById("map-canvas");
+const network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
+  physics: { enabled: false },
+  interaction: { hover: true, multiselect: false },
+  manipulation: { enabled: false },
+  edges: { smooth: { type: "curvedCW", roundness: 0.2 } },
+});
+
+// If any nodes have no position, run physics briefly to place them
+const hasUnpositioned = RAW_NODES.some(n => n.physics);
+if (hasUnpositioned) {
+  network.setOptions({ physics: { enabled: true, solver: "forceAtlas2Based",
+    stabilization: { iterations: 120 } } });
+  network.once("stabilized", () => network.setOptions({ physics: { enabled: false } }));
+}
+
+// ── Fit ──────────────────────────────────────────────────────────────────────
+document.getElementById("btnFit").addEventListener("click", () => network.fit({ animation: true }));
+setTimeout(() => network.fit(), 300);
+
+// ── Navigate on single click (when not in connect mode) ─────────────────────
+let connectMode = false;
+let pendingEdge = null;  // {from, to}
+
+network.on("click", params => {
+  if (connectMode) return;  // handled in selectNode below
+  if (params.nodes.length === 1) {
+    window.location.href = `/notebook/${params.nodes[0]}`;
+  }
+});
+
+// ── Delete edge on double-click ──────────────────────────────────────────────
+network.on("doubleClick", params => {
+  if (params.edges.length === 1 && params.nodes.length === 0) {
+    const eid = params.edges[0];
+    if (!confirm("Delete this connection?")) return;
+    fetch(`/notebook/map/edges/${eid}/delete`, { method: "POST" })
+      .then(r => r.json())
+      .then(d => { if (d.ok) edgesDS.remove(eid); });
+  }
+});
+
+// ── Save positions after drag ────────────────────────────────────────────────
+let saveTimer = null;
+network.on("dragEnd", params => {
+  if (!params.nodes.length) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const positions = network.getPositions(params.nodes);
+    const payload = Object.entries(positions).map(([id, pos]) => ({
+      id: parseInt(id), x: pos.x, y: pos.y,
+    }));
+    fetch("/notebook/map/positions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }, 500);
+});
+
+// ── Connect mode ─────────────────────────────────────────────────────────────
+const btnConnect = document.getElementById("btnConnect");
+btnConnect.addEventListener("click", () => {
+  connectMode = !connectMode;
+  btnConnect.classList.toggle("btn-primary", connectMode);
+  btnConnect.classList.toggle("btn-light", !connectMode);
+  pendingEdge = null;
+  if (connectMode) {
+    container.style.cursor = "crosshair";
+    btnConnect.innerHTML = '<i class="bi bi-x-lg me-1"></i>Cancel';
+  } else {
+    container.style.cursor = "";
+    btnConnect.innerHTML = '<i class="bi bi-share me-1"></i>Connect';
+  }
+});
+
+network.on("selectNode", params => {
+  if (!connectMode || !params.nodes.length) return;
+  const nodeId = params.nodes[0];
+  if (!pendingEdge) {
+    pendingEdge = { from: nodeId };
+    network.unselectAll();
+  } else if (pendingEdge.from !== nodeId) {
+    pendingEdge.to = nodeId;
+    network.unselectAll();
+    // Prompt for label
+    document.getElementById("edgeLabelInput").value = "";
+    document.getElementById("edge-label-modal").classList.add("show");
+    document.getElementById("edgeLabelInput").focus();
+  }
+});
+
+function confirmEdge() {
+  if (!pendingEdge) return;
+  const label = document.getElementById("edgeLabelInput").value.trim();
+  const fd = new FormData();
+  fd.append("source_id", pendingEdge.from);
+  fd.append("target_id", pendingEdge.to);
+  fd.append("label", label);
+  fetch("/notebook/map/edges", { method: "POST", body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        edgesDS.add({ id: d.id, from: pendingEdge.from, to: pendingEdge.to,
+                      label: label, arrows: "to",
+                      font: { size: 11, align: "middle" },
+                      color: { color: "#6b7280" } });
+      }
+    });
+  closeEdgeModal();
+}
+
+function cancelEdge() { closeEdgeModal(); }
+
+function closeEdgeModal() {
+  document.getElementById("edge-label-modal").classList.remove("show");
+  pendingEdge = null;
+  connectMode = false;
+  container.style.cursor = "";
+  btnConnect.classList.remove("btn-primary");
+  btnConnect.classList.add("btn-light");
+  btnConnect.innerHTML = '<i class="bi bi-share me-1"></i>Connect';
+}
+
+document.getElementById("btnConfirmEdge").addEventListener("click", confirmEdge);
+document.getElementById("btnCancelEdge").addEventListener("click", cancelEdge);
+document.getElementById("edgeLabelInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); confirmEdge(); }
+  if (e.key === "Escape") cancelEdge();
+});
+
+// ── Auto-layout toggle ───────────────────────────────────────────────────────
+let physicsOn = false;
+document.getElementById("btnPhysics").addEventListener("click", () => {
+  physicsOn = !physicsOn;
+  network.setOptions({ physics: { enabled: physicsOn, solver: "forceAtlas2Based" } });
+  document.getElementById("btnPhysics").classList.toggle("btn-primary", physicsOn);
+  document.getElementById("btnPhysics").classList.toggle("btn-light", !physicsOn);
+  if (!physicsOn) {
+    // Save positions after layout settles
+    setTimeout(() => {
+      const ids = nodesDS.getIds();
+      const positions = network.getPositions(ids);
+      const payload = ids.map(id => ({ id, x: positions[id].x, y: positions[id].y }));
+      fetch("/notebook/map/positions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }, 100);
+  }
+});
+</script>
+{% endblock %}

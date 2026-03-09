@@ -15,14 +15,17 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.workflow_engine import fire_paper_status_triggers
 from app.models.affiliation import AuthorAffiliation
 from app.models.author import Author
 from app.models.conference import ConferenceEdition
 from app.models.group import GroupMembership
 from app.models.journal import Journal
 from app.models.paper import (
+    MILESTONE_TYPE_LABELS,
     PAPER_STATUS_COLORS,
     PAPER_STATUS_LABELS,
+    MilestoneType,
     PaperAuthor,
     PaperChangeLog,
     PaperComment,
@@ -30,6 +33,7 @@ from app.models.paper import (
     PaperEventType,
     PaperGroupShare,
     PaperJournalSubmission,
+    PaperMilestone,
     PaperProject,
     PaperResource,
     PaperResourceType,
@@ -39,6 +43,7 @@ from app.models.paper import (
     TodoStatus,
 )
 from app.models.scholar import ScholarPaperSnapshot
+from app.models.workflow import PaperWorkflowSubscription as _PWS
 
 router = APIRouter(prefix="/papers", tags=["papers"])
 templates = Jinja2Templates(directory="app/templates")
@@ -154,10 +159,19 @@ async def list_papers(
 ):
     if not current_user:
         return RedirectResponse("/login", 302)
+    vis = _visibility_filter(current_user.id, current_user.author_id)
+
+    # Per-status counts for tab badges (respects search query)
+    count_base = select(PaperProject.status, func.count(PaperProject.id)).where(vis)
+    if q:
+        count_base = count_base.where(PaperProject.title.ilike(f"%{q}%"))
+    count_rows = (await db.execute(count_base.group_by(PaperProject.status))).all()
+    counts_by_status = {(r[0].value if hasattr(r[0], "value") else r[0]): r[1] for r in count_rows}
+
     stmt = select(PaperProject).options(
         selectinload(PaperProject.paper_authors).selectinload(PaperAuthor.author),
         selectinload(PaperProject.paper_authors).selectinload(PaperAuthor.affiliation),
-    ).where(_visibility_filter(current_user.id, current_user.author_id))
+    ).where(vis)
     if q:
         stmt = stmt.where(PaperProject.title.ilike(f"%{q}%"))
     if status:
@@ -167,10 +181,16 @@ async def list_papers(
         stmt.order_by(PaperProject.updated_at.desc())
         .offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
     )).scalars().all()
+    query_params = {}
+    if q:
+        query_params["q"] = q
+    if status:
+        query_params["status"] = status
     return templates.TemplateResponse(
         request, "papers/list.html",
         _ctx(request, current_user, papers=items, total=total, page=page,
-             total_pages=(total + PAGE_SIZE - 1) // PAGE_SIZE, q=q, status=status),
+             total_pages=(total + PAGE_SIZE - 1) // PAGE_SIZE, q=q, status=status,
+             counts_by_status=counts_by_status, query_params=query_params),
     )
 
 
@@ -182,8 +202,12 @@ async def new_paper_form(
 ):
     if not current_user:
         return RedirectResponse("/login", 302)
+    all_authors = (await db.execute(
+        select(Author).order_by(Author.last_name, Author.given_name)
+    )).scalars().all()
     return templates.TemplateResponse(request, "papers/form.html",
-                                      _ctx(request, current_user, paper=None, action="/papers"))
+                                      _ctx(request, current_user, paper=None, action="/papers",
+                                           all_authors=all_authors))
 
 
 @router.post("", response_class=HTMLResponse)
@@ -196,18 +220,22 @@ async def create_paper(
     overleaf_url: str = Form(default=""),
     github_url: str = Form(default=""),
     google_scholar_paper_id: str = Form(default=""),
+    published_date: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     if not current_user:
         return RedirectResponse("/login", 302)
+    from datetime import date as _date
     ps = PaperStatus(status)
+    pub_date = _date.fromisoformat(published_date) if published_date else None
     paper = PaperProject(
         title=title, description=description or None,
         status=ps,
         overleaf_url=overleaf_url or None,
         github_url=github_url or None,
         google_scholar_paper_id=google_scholar_paper_id or None,
+        published_date=pub_date,
         created_by=current_user.id,
     )
     db.add(paper)
@@ -261,6 +289,10 @@ async def paper_detail(
             selectinload(PaperProject.paper_authors).selectinload(PaperAuthor.affiliation),
             selectinload(PaperProject.comments).selectinload(PaperComment.user),
             selectinload(PaperProject.todos).selectinload(TodoItem.assigned_user),
+            selectinload(PaperProject.todos).selectinload(TodoItem.source_workflow),
+            selectinload(PaperProject.todos).selectinload(TodoItem.blocked_by),
+            selectinload(PaperProject.workflow_subscriptions).selectinload(_PWS.workflow),
+            selectinload(PaperProject.milestones),
             selectinload(PaperProject.group_shares).selectinload(PaperGroupShare.group),
             selectinload(PaperProject.resources).selectinload(PaperResource.creator),
             selectinload(PaperProject.change_log).selectinload(PaperChangeLog.creator),
@@ -304,13 +336,42 @@ async def paper_detail(
         for entry in paper.change_log
     ]
 
+    # Workflows visible to this user (for manual apply dropdown)
+    from app.models.workflow import Workflow, WorkflowShare
+    from sqlalchemy import or_, exists as sqla_exists
+    group_ids = [r[0] for r in (await db.execute(
+        select(GroupMembership.group_id).where(GroupMembership.user_id == current_user.id)
+    )).all()]
+    wf_filter = or_(
+        Workflow.owner_id == current_user.id,
+        Workflow.is_public == True,  # noqa: E712
+        sqla_exists(select(WorkflowShare.id).where(
+            (WorkflowShare.workflow_id == Workflow.id) &
+            (WorkflowShare.shared_with_user_id == current_user.id)
+        )),
+        *(
+            [sqla_exists(select(WorkflowShare.id).where(
+                (WorkflowShare.workflow_id == Workflow.id) &
+                (WorkflowShare.shared_with_group_id.in_(group_ids))
+            ))] if group_ids else []
+        ),
+    )
+    visible_workflows = (await db.execute(
+        select(Workflow).where(wf_filter).order_by(Workflow.name)
+    )).scalars().all()
+
+    subscribed_wf_ids = {s.workflow_id for s in paper.workflow_subscriptions}
+
     return templates.TemplateResponse(
         request, "papers/detail.html",
         _ctx(request, current_user, paper=paper, gs_snapshots=gs_snapshots,
              rendered_comments=rendered_comments, rendered_log=rendered_log,
              editions=editions, journals=journals, users=users, today=date.today(),
              submission_statuses=list(SubmissionStatus), todo_statuses=list(TodoStatus),
-             resource_types=list(PaperResourceType), event_types=PaperEventType),
+             resource_types=list(PaperResourceType), event_types=PaperEventType,
+             milestone_types=list(MilestoneType), milestone_type_labels=MILESTONE_TYPE_LABELS,
+             visible_workflows=visible_workflows,
+             subscribed_wf_ids=subscribed_wf_ids),
     )
 
 
@@ -335,10 +396,14 @@ async def edit_paper_form(
         return RedirectResponse("/papers", 302)
     author_str = "; ".join(f"{pa.author.last_name}, {pa.author.given_name}"
                            for pa in paper.paper_authors)
+    all_authors = (await db.execute(
+        select(Author).order_by(Author.last_name, Author.given_name)
+    )).scalars().all()
     return templates.TemplateResponse(request, "papers/form.html",
                                       _ctx(request, current_user, paper=paper,
                                            author_str=author_str,
-                                           action=f"/papers/{paper_id}/edit"))
+                                           action=f"/papers/{paper_id}/edit",
+                                           all_authors=all_authors))
 
 
 @router.post("/{paper_id}/edit")
@@ -351,11 +416,13 @@ async def update_paper(
     overleaf_url: str = Form(default=""),
     github_url: str = Form(default=""),
     google_scholar_paper_id: str = Form(default=""),
+    published_date: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     if not current_user:
         return RedirectResponse("/login", 302)
+    from datetime import date as _date
     result = await db.execute(
         select(PaperProject).options(selectinload(PaperProject.paper_authors))
         .where(
@@ -368,7 +435,8 @@ async def update_paper(
         return RedirectResponse("/papers", 302)
 
     new_status = PaperStatus(status)
-    if paper.status != new_status:
+    status_changed = paper.status != new_status
+    if status_changed:
         _add_log(db, paper.id, current_user.id, PaperEventType.status_change,
                  old_status=paper.status.value, new_status=new_status.value)
 
@@ -381,6 +449,7 @@ async def update_paper(
     paper.overleaf_url = overleaf_url or None
     paper.github_url = github_url or None
     paper.google_scholar_paper_id = google_scholar_paper_id or None
+    paper.published_date = _date.fromisoformat(published_date) if published_date else None
 
     if authors_raw.strip():
         for pa in paper.paper_authors:
@@ -414,8 +483,45 @@ async def update_paper(
                  resource_id=res.id, note="GitHub repository added")
 
     await _link_gs_snapshots(db, paper.id, google_scholar_paper_id or None)
+    if status_changed:
+        group_ids = [r[0] for r in (await db.execute(
+            select(GroupMembership.group_id).where(GroupMembership.user_id == current_user.id)
+        )).all()]
+        await fire_paper_status_triggers(db, paper.id, new_status.value, current_user.id, group_ids)
     await db.commit()
     return RedirectResponse(f"/papers/{paper_id}", 302)
+
+
+@router.post("/{paper_id}/status")
+async def update_status(
+    request: Request,
+    paper_id: int,
+    status: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    result = await db.execute(
+        select(PaperProject).where(
+            (PaperProject.id == paper_id) &
+            _visibility_filter(current_user.id, current_user.author_id)
+        )
+    )
+    paper = result.scalar_one_or_none()
+    if paper:
+        new_status = PaperStatus(status)
+        if new_status != paper.status:
+            _add_log(db, paper_id, current_user.id, PaperEventType.status_change,
+                     old_status=paper.status, new_status=new_status)
+            paper.status = new_status
+            group_ids = [r[0] for r in (await db.execute(
+                select(GroupMembership.group_id).where(GroupMembership.user_id == current_user.id)
+            )).all()]
+            await fire_paper_status_triggers(db, paper_id, new_status.value, current_user.id, group_ids)
+        await db.commit()
+    referer = request.headers.get("referer", f"/papers/{paper_id}")
+    return RedirectResponse(referer, 302)
 
 
 @router.post("/{paper_id}/delete")
@@ -479,14 +585,25 @@ async def add_todo(
     title: str = Form(...),
     description: str = Form(default=""),
     assigned_to: Optional[int] = Form(default=None),
+    due_date: str = Form(default=""),
+    blocked_by_id: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     if not current_user:
         return RedirectResponse("/login", 302)
+    from datetime import date as _date
+    parsed_due = None
+    if due_date:
+        try:
+            parsed_due = _date.fromisoformat(due_date)
+        except ValueError:
+            pass
+    blocker_id = int(blocked_by_id) if blocked_by_id.strip() else None
     db.add(TodoItem(
         paper_id=paper_id, title=title, description=description or None,
-        assigned_to=assigned_to, status=TodoStatus.open,
+        assigned_to=assigned_to, due_date=parsed_due, status=TodoStatus.open,
+        blocked_by_id=blocker_id,
     ))
     await db.commit()
     return RedirectResponse(f"/papers/{paper_id}?tab=activity#todos", 302)
@@ -523,6 +640,112 @@ async def delete_todo(
         await db.delete(todo)
         await db.commit()
     return RedirectResponse(f"/papers/{paper_id}?tab=activity#todos", 302)
+
+
+# ── Workflow subscriptions ─────────────────────────────────────────────────────
+
+@router.post("/{paper_id}/workflow-subscriptions")
+async def subscribe_workflow(
+    paper_id: int,
+    workflow_id: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Subscribe this paper to a workflow (paper-specific trigger scope)."""
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    from app.models.workflow import PaperWorkflowSubscription
+    wf_id = int(workflow_id)
+    existing = (await db.execute(
+        select(PaperWorkflowSubscription).where(
+            PaperWorkflowSubscription.paper_id == paper_id,
+            PaperWorkflowSubscription.workflow_id == wf_id,
+        )
+    )).scalar_one_or_none()
+    if not existing:
+        db.add(PaperWorkflowSubscription(paper_id=paper_id, workflow_id=wf_id))
+        await db.commit()
+    return RedirectResponse(f"/papers/{paper_id}?tab=activity#workflows", 302)
+
+
+@router.post("/{paper_id}/workflow-subscriptions/{wf_id}/delete")
+async def unsubscribe_workflow(
+    paper_id: int, wf_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    from app.models.workflow import PaperWorkflowSubscription
+    sub = (await db.execute(
+        select(PaperWorkflowSubscription).where(
+            PaperWorkflowSubscription.paper_id == paper_id,
+            PaperWorkflowSubscription.workflow_id == wf_id,
+        )
+    )).scalar_one_or_none()
+    if sub:
+        await db.delete(sub)
+        await db.commit()
+    return RedirectResponse(f"/papers/{paper_id}?tab=activity#workflows", 302)
+
+
+# ── Milestones ──
+
+@router.post("/{paper_id}/milestones")
+async def add_milestone(
+    paper_id: int,
+    title: str = Form(...),
+    milestone_type: str = Form(default="internal_deadline"),
+    due_date: str = Form(...),
+    description: str = Form(default=""),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    from datetime import date as _date
+    try:
+        parsed_due = _date.fromisoformat(due_date)
+    except ValueError:
+        return RedirectResponse(f"/papers/{paper_id}?tab=activity#milestones", 302)
+    db.add(PaperMilestone(
+        paper_id=paper_id, title=title,
+        milestone_type=MilestoneType(milestone_type),
+        due_date=parsed_due,
+        description=description or None,
+    ))
+    await db.commit()
+    return RedirectResponse(f"/papers/{paper_id}?tab=activity#milestones", 302)
+
+
+@router.post("/{paper_id}/milestones/{milestone_id}/toggle")
+async def toggle_milestone(
+    paper_id: int, milestone_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    m = (await db.execute(select(PaperMilestone).where(PaperMilestone.id == milestone_id))).scalar_one_or_none()
+    if m:
+        m.is_done = not m.is_done
+        await db.commit()
+    return RedirectResponse(f"/papers/{paper_id}?tab=activity#milestones", 302)
+
+
+@router.post("/{paper_id}/milestones/{milestone_id}/delete")
+async def delete_milestone(
+    paper_id: int, milestone_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    m = (await db.execute(select(PaperMilestone).where(PaperMilestone.id == milestone_id))).scalar_one_or_none()
+    if m:
+        await db.delete(m)
+        await db.commit()
+    return RedirectResponse(f"/papers/{paper_id}?tab=activity#milestones", 302)
 
 
 # ── Resources ──

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Form, Request
+import os
+
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -13,6 +15,24 @@ router = APIRouter(prefix="/affiliations", tags=["affiliations"])
 templates = Jinja2Templates(directory="app/templates")
 
 PAGE_SIZE = 25
+_LOGO_DIR = "static/uploads/affiliation_logos"
+_ALLOWED_TYPES = {"image/png", "image/jpeg", "image/svg+xml"}
+_LOGO_EXTS = {"image/png": ".png", "image/jpeg": ".jpg", "image/svg+xml": ".svg"}
+
+
+async def _save_logo(logo: UploadFile, aff_id: int) -> str | None:
+    if not logo or not logo.filename or logo.content_type not in _ALLOWED_TYPES:
+        return None
+    os.makedirs(_LOGO_DIR, exist_ok=True)
+    ext = _LOGO_EXTS[logo.content_type]
+    for old_ext in _LOGO_EXTS.values():
+        old = os.path.join(_LOGO_DIR, f"{aff_id}{old_ext}")
+        if os.path.exists(old):
+            os.remove(old)
+    path = os.path.join(_LOGO_DIR, f"{aff_id}{ext}")
+    with open(path, "wb") as f:
+        f.write(await logo.read())
+    return f"/static/uploads/affiliation_logos/{aff_id}{ext}"
 
 
 def _ctx(request, current_user, **kw):
@@ -61,6 +81,7 @@ async def create_affiliation(
     color: str = Form(default=""),
     website: str = Form(default=""),
     description: str = Form(default=""),
+    logo: UploadFile = File(default=None),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -71,6 +92,10 @@ async def create_affiliation(
         color=color or None, website=website or None, description=description or None,
     )
     db.add(aff)
+    await db.flush()
+    logo_path = await _save_logo(logo, aff.id)
+    if logo_path:
+        aff.logo_path = logo_path
     await db.commit()
     return RedirectResponse("/affiliations", 302)
 
@@ -122,6 +147,8 @@ async def update_affiliation(
     color: str = Form(default=""),
     website: str = Form(default=""),
     description: str = Form(default=""),
+    logo: UploadFile = File(default=None),
+    remove_logo: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -137,6 +164,16 @@ async def update_affiliation(
     aff.color = color or None
     aff.website = website or None
     aff.description = description or None
+    if remove_logo:
+        for ext in _LOGO_EXTS.values():
+            p = os.path.join(_LOGO_DIR, f"{aff_id}{ext}")
+            if os.path.exists(p):
+                os.remove(p)
+        aff.logo_path = None
+    else:
+        logo_path = await _save_logo(logo, aff_id)
+        if logo_path:
+            aff.logo_path = logo_path
     await db.commit()
     return RedirectResponse(f"/affiliations/{aff_id}", 302)
 
@@ -152,6 +189,10 @@ async def delete_affiliation(
     result = await db.execute(select(Affiliation).where(Affiliation.id == aff_id))
     aff = result.scalar_one_or_none()
     if aff:
+        for ext in _LOGO_EXTS.values():
+            p = os.path.join(_LOGO_DIR, f"{aff_id}{ext}")
+            if os.path.exists(p):
+                os.remove(p)
         await db.delete(aff)
         await db.commit()
     return RedirectResponse("/affiliations", 302)

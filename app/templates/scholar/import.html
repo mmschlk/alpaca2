@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Import from Google Scholar{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-cloud-download me-2"></i>Import from Google Scholar</h4>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold small">Select Profile</div>
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold">Author (with GS profile)</label>
+        <select id="authorSelect" class="form-select" onchange="authorSelected(this.value)">
+          <option value="">— or enter GS ID manually —</option>
+          {% for a in authors %}
+          <option value="{{ a.id }}" data-gsid="{{ a.google_scholar_id }}"
+                  {% if selected_author and selected_author.id == a.id %}selected{% endif %}>
+            {{ a.display_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold">Google Scholar User ID</label>
+        <input type="text" id="gsIdInput" class="form-control font-monospace"
+               placeholder="e.g. ABC123XYZ"
+               value="{{ selected_author.google_scholar_id if selected_author else '' }}">
+      </div>
+      <div class="col-md-4">
+        <button class="btn btn-primary" onclick="loadPreview()">
+          <i class="bi bi-search me-1"></i>Fetch Papers
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="previewContainer">
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-cloud-arrow-down fs-1 d-block mb-2 opacity-25"></i>
+    Select an author or enter a Google Scholar ID and click Fetch Papers.
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function authorSelected(authorId) {
+    if (!authorId) return;
+    const opt = document.querySelector(`#authorSelect option[value="${authorId}"]`);
+    if (opt) document.getElementById('gsIdInput').value = opt.dataset.gsid || '';
+}
+
+async function loadPreview() {
+    const gsId = document.getElementById('gsIdInput').value.trim();
+    const authorId = document.getElementById('authorSelect').value;
+    if (!gsId) {
+        alert('Please enter a Google Scholar User ID.');
+        return;
+    }
+    const container = document.getElementById('previewContainer');
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted small">Fetching from Google Scholar…</div></div>';
+    const params = new URLSearchParams({ gs_id: gsId, author_id: authorId || '' });
+    const resp = await fetch('/scholar/import/preview?' + params);
+    container.innerHTML = await resp.text();
+}
+
+// Auto-load if an author is pre-selected
+{% if selected_author %}
+window.addEventListener('DOMContentLoaded', loadPreview);
+{% endif %}
+</script>
+{% endblock %}

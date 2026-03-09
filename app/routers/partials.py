@@ -9,11 +9,15 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.models.claim import AuthorClaimRequest, ClaimStatus
 from app.models.conference import ConferenceEdition, StarredConferenceEdition
-from app.models.paper import PaperAuthor, PaperConferenceSubmission
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.paper import PaperAuthor, PaperConferenceSubmission, PaperMilestone, PaperProject
+from app.routers.papers import _visibility_filter
 
 router = APIRouter(prefix="/partials", tags=["partials"])
 templates = Jinja2Templates(directory="app/templates")
@@ -28,6 +32,23 @@ DEADLINE_FIELD_LABELS = {
     "notification_date": "Notification",
     "camera_ready_deadline": "Camera Ready",
 }
+
+
+@router.get("/claims-badge", response_class=HTMLResponse)
+async def claims_badge(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user or not current_user.is_admin:
+        return HTMLResponse("")
+    count = (await db.execute(
+        select(func.count(AuthorClaimRequest.id))
+        .where(AuthorClaimRequest.status == ClaimStatus.pending)
+    )).scalar_one()
+    if count == 0:
+        return HTMLResponse("")
+    return HTMLResponse(f'<span class="badge bg-warning text-dark ms-1">{count}</span>')
 
 
 @router.get("/upcoming-deadlines", response_class=HTMLResponse)
@@ -85,10 +106,31 @@ async def upcoming_deadlines(
         if deadlines:
             deadlines.sort(key=lambda x: x["date"])
             deadline_items.append({
+                "kind": "conference",
                 "edition_label": f"{ed.conference.abbreviation} {ed.year}",
                 "deadlines": deadlines,
-                "paper_title": None,  # could link a submitted paper title here
+                "paper_title": None,
             })
+
+    # Milestones from visible papers that are not done and within the window
+    milestone_result = await db.execute(
+        select(PaperMilestone)
+        .join(PaperProject, PaperProject.id == PaperMilestone.paper_id)
+        .options(selectinload(PaperMilestone.paper))
+        .where(_visibility_filter(current_user.id, current_user.author_id))
+        .where(PaperMilestone.is_done == False)  # noqa: E712
+        .where(PaperMilestone.due_date >= today)
+        .where(PaperMilestone.due_date <= horizon)
+    )
+    for ms in milestone_result.scalars().all():
+        days_left = (ms.due_date - today).days
+        deadline_items.append({
+            "kind": "milestone",
+            "edition_label": ms.title,
+            "paper_title": ms.paper.title,
+            "paper_id": ms.paper_id,
+            "deadlines": [{"name": ms.title, "date": ms.due_date, "days_left": days_left}],
+        })
 
     deadline_items.sort(key=lambda x: x["deadlines"][0]["date"])
 

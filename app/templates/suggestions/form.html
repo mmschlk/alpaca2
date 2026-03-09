@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}
+  {% if suggestion_type == 'conference' %}Suggest a Conference
+  {% elif suggestion_type == 'conference_edition' %}Suggest a Conference Edition
+  {% elif suggestion_type == 'journal' %}Suggest a Journal
+  {% else %}Suggest a Special Issue{% endif %}
+{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/suggest/my">My Suggestions</a></li>
+    <li class="breadcrumb-item active">
+      {% if suggestion_type == 'conference' %}Conference
+      {% elif suggestion_type == 'conference_edition' %}Conference Edition
+      {% elif suggestion_type == 'journal' %}Journal
+      {% else %}Special Issue{% endif %}
+    </li>
+  </ol>
+</nav>
+
+<div class="card" style="max-width:620px">
+  <div class="card-body">
+    <h5 class="fw-bold mb-1">
+      <i class="bi bi-lightbulb me-2 text-warning"></i>
+      {% if suggestion_type == 'conference' %}Suggest a New Conference
+      {% elif suggestion_type == 'conference_edition' %}Suggest a Conference Edition
+      {% elif suggestion_type == 'journal' %}Suggest a New Journal
+      {% else %}Suggest a Journal Special Issue{% endif %}
+    </h5>
+    <p class="text-muted small mb-4">Your suggestion will be reviewed by a moderator before being added.</p>
+
+    {# ── Conference ────────────────────────────────────── #}
+    {% if suggestion_type == 'conference' %}
+    <form method="post" action="/suggest/conference">
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label small fw-semibold">Conference Name *</label>
+          <input type="text" name="name" class="form-control" required placeholder="e.g. International Conference on Machine Learning">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Abbreviation *</label>
+          <input type="text" name="abbreviation" class="form-control" required placeholder="e.g. ICML">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">CORE Rank</label>
+          <select name="core_rank" class="form-select">
+            <option value="">— Unknown —</option>
+            {% for r in core_ranks %}
+            <option value="{{ r }}">{{ r }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label small fw-semibold">Website</label>
+          <input type="url" name="website" class="form-control" placeholder="https://…">
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-semibold">WikiCFP Series ID</label>
+          <input type="text" name="wikicfp_series_id" class="form-control" placeholder="Optional numeric series ID">
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Submit Suggestion</button>
+        <a href="/conferences" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+
+    {# ── Conference Edition ────────────────────────────── #}
+    {% elif suggestion_type == 'conference_edition' %}
+    <form method="post" action="/suggest/conference-edition">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label small fw-semibold">Conference *</label>
+          <select name="conference_id" class="form-select" required>
+            <option value="">— Select conference —</option>
+            {% for c in conferences %}
+            <option value="{{ c.id }}"
+              {% if preselect_conference_id and c.id == preselect_conference_id %}selected{% endif %}>
+              {{ c.abbreviation }} — {{ c.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Year *</label>
+          <input type="number" name="year" class="form-control" required min="2000" max="2100" placeholder="2025">
+        </div>
+        <div class="col-md-8">
+          <label class="form-label small fw-semibold">Location</label>
+          <input type="text" name="location" class="form-control" placeholder="e.g. Vienna, Austria">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Abstract Deadline</label>
+          <input type="date" name="abstract_deadline" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Full Paper Deadline</label>
+          <input type="date" name="full_paper_deadline" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Notification Date</label>
+          <input type="date" name="notification_date" class="form-control">
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Submit Suggestion</button>
+        <a href="/conferences" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+
+    {# ── Journal ───────────────────────────────────────── #}
+    {% elif suggestion_type == 'journal' %}
+    <form method="post" action="/suggest/journal">
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label small fw-semibold">Journal Name *</label>
+          <input type="text" name="name" class="form-control" required placeholder="e.g. Journal of Machine Learning Research">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Abbreviation</label>
+          <input type="text" name="abbreviation" class="form-control" placeholder="e.g. JMLR">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Rank (Q1–Q4)</label>
+          <select name="rank" class="form-select">
+            <option value="">— Unknown —</option>
+            <option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option>
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label small fw-semibold">Website</label>
+          <input type="url" name="website" class="form-control" placeholder="https://…">
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Submit Suggestion</button>
+        <a href="/journals" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+
+    {# ── Journal Special Issue ─────────────────────────── #}
+    {% elif suggestion_type == 'journal_special_issue' %}
+    <form method="post" action="/suggest/journal-special-issue">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label small fw-semibold">Journal *</label>
+          <select name="journal_id" class="form-select" required>
+            <option value="">— Select journal —</option>
+            {% for j in journals %}
+            <option value="{{ j.id }}"
+              {% if preselect_journal_id and j.id == preselect_journal_id %}selected{% endif %}>
+              {{ j.name }}{% if j.abbreviation %} ({{ j.abbreviation }}){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-semibold">Special Issue Title *</label>
+          <input type="text" name="title" class="form-control" required placeholder="e.g. Special Issue on Trustworthy AI">
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-semibold">Description</label>
+          <textarea name="description" class="form-control" rows="3" placeholder="Brief description of the special issue scope…"></textarea>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small fw-semibold">Submission Deadline</label>
+          <input type="date" name="submission_deadline" class="form-control">
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Submit Suggestion</button>
+        <a href="/journals" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

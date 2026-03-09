@@ -1,0 +1,123 @@
+/* ── Alpaca Theme System ────────────────────────────────────────────────────
+   Themes are applied via data-alpaca-theme on <html>.
+   Bootstrap dark/light mode is controlled separately by data-bs-theme.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* ── Light (default) ───────────────────────────────────────────────────── */
+/* NOTE: No :root here — base.html always sets data-alpaca-theme so one of
+   the selectors below will always match. Using html[...] gives specificity
+   0,1,1 which reliably beats Bootstrap's :root vars (0,1,0). */
+html[data-alpaca-theme="light"] {
+  --alpaca-sidebar-bg:       #1d3a6e;
+  --alpaca-body-bg:          #f5f6fa;
+  --alpaca-deadlines-bg:     #ffffff;
+  --alpaca-deadlines-border: #dee2e6;
+
+  --bs-body-bg:              #f5f6fa;
+}
+
+/* ── Dark ──────────────────────────────────────────────────────────────── */
+html[data-alpaca-theme="dark"] {
+  --alpaca-sidebar-bg:       #0a0f1a;
+  --alpaca-body-bg:          #1a1f2e;
+  --alpaca-deadlines-bg:     #1a1d23;
+  --alpaca-deadlines-border: #2d3239;
+
+  --bs-body-bg:              #1a1f2e;
+}
+
+/* ── Solarized (light-family) ──────────────────────────────────────────── */
+html[data-alpaca-theme="solarized"] {
+  --alpaca-sidebar-bg:       #073642;
+  --alpaca-body-bg:          #fdf6e3;
+  --alpaca-deadlines-bg:     #eee8d5;
+  --alpaca-deadlines-border: #d0c8b0;
+
+  --bs-body-bg:              #fdf6e3;
+  --bs-body-color:           #657b83;
+  --bs-card-bg:              #eee8d5;
+  --bs-primary:              #268bd2;
+  --bs-primary-rgb:          38, 139, 210;
+  --bs-link-color:           #268bd2;
+  --bs-link-hover-color:     #1a6fa8;
+  --bs-border-color:         #d0c8b0;
+  --bs-secondary-bg:         #e8e2d0;
+  --bs-tertiary-bg:          #e0dac8;
+}
+
+/* ── High Contrast (dark-family) ───────────────────────────────────────── */
+html[data-alpaca-theme="high-contrast"] {
+  --alpaca-sidebar-bg:       #000000;
+  --alpaca-body-bg:          #000000;
+  --alpaca-deadlines-bg:     #111111;
+  --alpaca-deadlines-border: #ffffff;
+
+  --bs-body-bg:              #000000;
+  --bs-primary:              #ffff00;
+  --bs-primary-rgb:          255, 255, 0;
+  --bs-link-color:           #ffff00;
+  --bs-link-hover-color:     #cccc00;
+  --bs-border-color:         #ffffff;
+}
+
+/* ── Ocean (dark-family) ───────────────────────────────────────────────── */
+html[data-alpaca-theme="ocean"] {
+  --alpaca-sidebar-bg:       #0d1b2a;
+  --alpaca-body-bg:          #16213e;
+  --alpaca-deadlines-bg:     #0f3460;
+  --alpaca-deadlines-border: #1a4a7a;
+
+  --bs-body-bg:              #16213e;
+  --bs-card-bg:              #0f3460;
+  --bs-primary:              #00b4d8;
+  --bs-primary-rgb:          0, 180, 216;
+  --bs-link-color:           #00b4d8;
+  --bs-link-hover-color:     #0090ae;
+  --bs-border-color:         #1a4a7a;
+  --bs-secondary-bg:         #0d2a4a;
+  --bs-tertiary-bg:          #0a2238;
+}
+
+/* ── Forest (dark-family) ──────────────────────────────────────────────── */
+html[data-alpaca-theme="forest"] {
+  --alpaca-sidebar-bg:       #1b2e1b;
+  --alpaca-body-bg:          #1a2e1a;
+  --alpaca-deadlines-bg:     #2d4a2d;
+  --alpaca-deadlines-border: #3d5e3d;
+
+  --bs-body-bg:              #1a2e1a;
+  --bs-card-bg:              #2d4a2d;
+  --bs-primary:              #52b788;
+  --bs-primary-rgb:          82, 183, 136;
+  --bs-link-color:           #52b788;
+  --bs-link-hover-color:     #3d9668;
+  --bs-border-color:         #3d5e3d;
+  --bs-secondary-bg:         #253d25;
+  --bs-tertiary-bg:          #1e331e;
+}
+
+/* ── Font-size presets (data-alpaca-font on <html>) ────────────────────── */
+html[data-alpaca-font="sm"] { --bs-body-font-size: 0.875rem; }
+/* md is Bootstrap default, no override needed */
+html[data-alpaca-font="lg"] { --bs-body-font-size: 1.0625rem; }
+
+/* ── Border-radius presets (data-alpaca-radius on <html>) ──────────────── */
+html[data-alpaca-radius="none"] {
+  --bs-border-radius:    0;
+  --bs-border-radius-sm: 0;
+  --bs-border-radius-lg: 0;
+  --bs-border-radius-xl: 0;
+}
+html[data-alpaca-radius="sm"] {
+  --bs-border-radius:    0.2rem;
+  --bs-border-radius-sm: 0.1rem;
+  --bs-border-radius-lg: 0.4rem;
+  --bs-border-radius-xl: 0.6rem;
+}
+/* md is Bootstrap default, no override needed */
+html[data-alpaca-radius="lg"] {
+  --bs-border-radius:    0.6rem;
+  --bs-border-radius-sm: 0.4rem;
+  --bs-border-radius-lg: 1rem;
+  --bs-border-radius-xl: 1.5rem;
+}

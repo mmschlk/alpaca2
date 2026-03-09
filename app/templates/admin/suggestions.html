@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Suggestion Reviews{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/admin">Admin</a></li>
+    <li class="breadcrumb-item active">Suggestions</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-lightbulb me-2"></i>Suggestion Reviews</h4>
+  <div class="btn-group btn-group-sm" role="group">
+    <a href="/admin/suggestions?status=pending"
+       class="btn {% if filter_status.value == 'pending' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+      Pending
+    </a>
+    <a href="/admin/suggestions?status=approved"
+       class="btn {% if filter_status.value == 'approved' %}btn-success{% else %}btn-outline-success{% endif %}">
+      Approved
+    </a>
+    <a href="/admin/suggestions?status=rejected"
+       class="btn {% if filter_status.value == 'rejected' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+      Rejected
+    </a>
+  </div>
+</div>
+
+{% for s in suggestions %}
+{% set d = s.data_dict %}
+<div class="card mb-3 {% if s.status.value == 'approved' %}border-success{% elif s.status.value == 'rejected' %}border-danger{% endif %}">
+  <div class="card-header d-flex justify-content-between align-items-center py-2">
+    <div>
+      <span class="badge bg-secondary me-2">{{ s.type_label }}</span>
+      <span class="small fw-semibold">{{ s.submitted_by.username }}</span>
+      <span class="text-muted small ms-2">{{ s.submitted_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    </div>
+    {% if s.status.value == 'pending' %}
+    <span class="badge bg-warning text-dark">Pending</span>
+    {% elif s.status.value == 'approved' %}
+    <span class="badge bg-success">Approved</span>
+    {% else %}
+    <span class="badge bg-danger">Rejected</span>
+    {% endif %}
+  </div>
+  <div class="card-body py-3">
+    <dl class="row mb-0 small">
+      {% if s.entity_type.value == 'conference' %}
+      <dt class="col-sm-3">Name</dt><dd class="col-sm-9">{{ d.name }}</dd>
+      <dt class="col-sm-3">Abbreviation</dt><dd class="col-sm-9">{{ d.abbreviation }}</dd>
+      {% if d.core_rank %}<dt class="col-sm-3">CORE Rank</dt><dd class="col-sm-9">{{ d.core_rank }}</dd>{% endif %}
+      {% if d.website %}<dt class="col-sm-3">Website</dt><dd class="col-sm-9"><a href="{{ d.website }}" target="_blank" rel="noopener">{{ d.website }}</a></dd>{% endif %}
+      {% if d.wikicfp_series_id %}<dt class="col-sm-3">WikiCFP ID</dt><dd class="col-sm-9">{{ d.wikicfp_series_id }}</dd>{% endif %}
+
+      {% elif s.entity_type.value == 'conference_edition' %}
+      <dt class="col-sm-3">Conference ID</dt><dd class="col-sm-9">{{ d.conference_id }}</dd>
+      <dt class="col-sm-3">Year</dt><dd class="col-sm-9">{{ d.year }}</dd>
+      {% if d.location %}<dt class="col-sm-3">Location</dt><dd class="col-sm-9">{{ d.location }}</dd>{% endif %}
+      {% if d.abstract_deadline %}<dt class="col-sm-3">Abstract DL</dt><dd class="col-sm-9">{{ d.abstract_deadline }}</dd>{% endif %}
+      {% if d.full_paper_deadline %}<dt class="col-sm-3">Full Paper DL</dt><dd class="col-sm-9">{{ d.full_paper_deadline }}</dd>{% endif %}
+      {% if d.notification_date %}<dt class="col-sm-3">Notification</dt><dd class="col-sm-9">{{ d.notification_date }}</dd>{% endif %}
+
+      {% elif s.entity_type.value == 'journal' %}
+      <dt class="col-sm-3">Name</dt><dd class="col-sm-9">{{ d.name }}</dd>
+      {% if d.abbreviation %}<dt class="col-sm-3">Abbreviation</dt><dd class="col-sm-9">{{ d.abbreviation }}</dd>{% endif %}
+      {% if d.rank %}<dt class="col-sm-3">Rank</dt><dd class="col-sm-9">{{ d.rank }}</dd>{% endif %}
+      {% if d.website %}<dt class="col-sm-3">Website</dt><dd class="col-sm-9"><a href="{{ d.website }}" target="_blank" rel="noopener">{{ d.website }}</a></dd>{% endif %}
+
+      {% elif s.entity_type.value == 'journal_special_issue' %}
+      <dt class="col-sm-3">Journal ID</dt><dd class="col-sm-9">{{ d.journal_id }}</dd>
+      <dt class="col-sm-3">Title</dt><dd class="col-sm-9">{{ d.title }}</dd>
+      {% if d.description %}<dt class="col-sm-3">Description</dt><dd class="col-sm-9">{{ d.description }}</dd>{% endif %}
+      {% if d.submission_deadline %}<dt class="col-sm-3">Deadline</dt><dd class="col-sm-9">{{ d.submission_deadline }}</dd>{% endif %}
+      {% endif %}
+    </dl>
+
+    {% if s.review_note %}
+    <div class="mt-2 text-muted small fst-italic border-top pt-2">
+      <i class="bi bi-chat-left-text me-1"></i>{{ s.review_note }}
+      {% if s.reviewed_by %} — {{ s.reviewed_by.username }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if s.status.value == 'pending' %}
+  <div class="card-footer bg-transparent d-flex gap-2 align-items-end">
+    <form method="post" action="/admin/suggestions/{{ s.id }}/approve" class="d-flex gap-2 flex-grow-1">
+      <input type="text" name="review_note" class="form-control form-control-sm" placeholder="Optional note…">
+      <button class="btn btn-sm btn-success text-nowrap">
+        <i class="bi bi-check-lg me-1"></i>Approve
+      </button>
+    </form>
+    <form method="post" action="/admin/suggestions/{{ s.id }}/reject" class="d-flex gap-2"
+          onsubmit="return confirm('Reject this suggestion?')">
+      <input type="text" name="review_note" class="form-control form-control-sm" placeholder="Reason…">
+      <button class="btn btn-sm btn-outline-danger text-nowrap">
+        <i class="bi bi-x-lg me-1"></i>Reject
+      </button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="text-muted text-center py-5">
+  <i class="bi bi-inbox fs-1 d-block mb-2 opacity-25"></i>
+  No {{ filter_status.value }} suggestions.
+</div>
+{% endfor %}
+{% endblock %}

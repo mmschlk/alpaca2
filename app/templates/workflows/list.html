@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Workflows{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Workflows</h4>
+  <a href="/workflows/new" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Workflow
+  </a>
+</div>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'mine' %}active{% endif %}" href="?tab=mine">
+      <i class="bi bi-person me-1"></i>Mine
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'shared' %}active{% endif %}" href="?tab=shared">
+      <i class="bi bi-share me-1"></i>Shared with me
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'public' %}active{% endif %}" href="?tab=public">
+      <i class="bi bi-globe me-1"></i>Public
+    </a>
+  </li>
+</ul>
+
+{% if not workflows %}
+<div class="alert alert-info">
+  {% if tab == 'mine' %}
+    No workflows yet. <a href="/workflows/new">Create your first workflow.</a>
+  {% elif tab == 'shared' %}
+    No workflows have been shared with you yet.
+  {% else %}
+    No public workflows available.
+  {% endif %}
+</div>
+{% else %}
+<div class="row g-3">
+  {% for wf in workflows %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100 paper-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <h6 class="fw-semibold mb-0">
+            <a href="/workflows/{{ wf.id }}" class="text-decoration-none">{{ wf.name }}</a>
+          </h6>
+          <div class="d-flex gap-1">
+            {% if wf.is_public %}
+            <span class="badge bg-success-subtle text-success border border-success-subtle">Public</span>
+            {% endif %}
+          </div>
+        </div>
+        {% if wf.description %}
+        <p class="text-muted small mb-2">{{ wf.description | truncate(100) }}</p>
+        {% endif %}
+        <div class="d-flex gap-2 text-muted" style="font-size:0.78rem">
+          <span><i class="bi bi-check2-square me-1"></i>{{ wf.steps | length }} step{{ 's' if wf.steps | length != 1 }}</span>
+          <span><i class="bi bi-lightning me-1"></i>{{ wf.triggers | length }} trigger{{ 's' if wf.triggers | length != 1 }}</span>
+        </div>
+      </div>
+      {% if wf.owner_id == current_user.id %}
+      <div class="card-footer bg-transparent d-flex gap-1 justify-content-end py-2">
+        <a href="/workflows/{{ wf.id }}/edit" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-pencil"></i>
+        </a>
+        <form method="post" action="/workflows/{{ wf.id }}/delete"
+              onsubmit="return confirm('Delete workflow \u201c{{ wf.name }}\u201d?')">
+          <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
