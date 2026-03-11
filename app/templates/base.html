@@ -128,6 +128,11 @@
         </a>
       </li>
       <li class="nav-item">
+        <a class="nav-link {% if active_page == 'supervision' %}active{% endif %}" href="/supervision">
+          <i class="bi bi-mortarboard me-2"></i>Supervision
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link {% if active_page == 'calendar' %}active{% endif %}" href="/calendar">
           <i class="bi bi-calendar3 me-2"></i>Calendar
         </a>
@@ -157,19 +162,21 @@
       </li>
 
       {% if current_user.author_id %}
+      {% set _own_profile_path = '/authors/' ~ current_user.author_id|string %}
       <li class="nav-item">
-        <a class="nav-link {% if active_page == 'profile' %}active{% endif %}" href="/authors/{{ current_user.author_id }}">
+        <a class="nav-link {% if request.url.path == _own_profile_path or request.url.path.startswith(_own_profile_path ~ '/') %}active{% endif %}" href="/authors/{{ current_user.author_id }}">
           <i class="bi bi-person-badge me-2"></i>My Author Profile
         </a>
       </li>
       {% endif %}
       <li class="nav-item">
-        <a class="nav-link {% if active_page == 'collaborators' %}active{% endif %}" href="/collaborators">
+        <a class="nav-link {% if request.url.path == '/collaborators' or request.url.path.startswith('/collaborators/') %}active{% endif %}" href="/collaborators">
           <i class="bi bi-diagram-3 me-2"></i>My Collaborators
         </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link {% if active_page == 'authors' %}active{% endif %}" href="/authors">
+        {% set _on_own_profile = current_user.author_id and (request.url.path == '/authors/' ~ current_user.author_id|string or request.url.path.startswith('/authors/' ~ current_user.author_id|string ~ '/')) %}
+        <a class="nav-link {% if active_page == 'authors' and not _on_own_profile %}active{% endif %}" href="/authors">
           <i class="bi bi-people me-2"></i>Authors
         </a>
       </li>

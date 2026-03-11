@@ -16,11 +16,14 @@ from app.models.affiliation import Affiliation, AuthorAffiliation
 from app.models.author import Author
 from app.models.conference import Conference, ConferenceEdition
 from app.models.journal import Journal
-from app.models.paper import PaperAuthor, PaperProject, PaperStatus
+from app.models.paper import (
+    PaperAuthor, PaperConferenceSubmission, PaperJournalSubmission,
+    PaperProject, PaperStatus, SubmissionStatus,
+)
 from app.models.scholar import ScholarAuthorSnapshot
 from app.models.service import ServiceRecord, ServiceRole
 from app.orcid_client import (
-    OrcidRecord, fetch_orcid_record, validate_orcid,
+    OrcidRecord, OrcidContributor, fetch_orcid_record, validate_orcid,
     best_matches, top_match, map_orcid_role, work_venue_type, orcid_url,
 )
 from app.dblp_client import (
@@ -271,14 +274,15 @@ async def author_detail(
         graph_nodes_json = json.dumps(graph_nodes)
         graph_edges_json = json.dumps(graph_edges)
 
-    return templates.TemplateResponse(
-        request, "authors/detail.html",
-        _ctx(request, current_user, author=author, latest_snap=latest_snap,
-             snapshots=snapshots, affiliations=affiliations,
-             visible_paper_authors=visible_paper_authors,
-             graph_nodes_json=graph_nodes_json,
-             graph_edges_json=graph_edges_json),
-    )
+    is_own_page = current_user.author_id and current_user.author_id == author_id
+    ctx = _ctx(request, current_user, author=author, latest_snap=latest_snap,
+               snapshots=snapshots, affiliations=affiliations,
+               visible_paper_authors=visible_paper_authors,
+               graph_nodes_json=graph_nodes_json,
+               graph_edges_json=graph_edges_json)
+    if is_own_page:
+        ctx["active_page"] = "profile"
+    return templates.TemplateResponse(request, "authors/detail.html", ctx)
 
 
 @router.get("/{author_id}/edit", response_class=HTMLResponse)
@@ -413,7 +417,9 @@ async def orcid_import_form(
         request, "authors/orcid_import.html",
         _orcid_ctx(request, current_user, author=author, phase="fetch",
                    record=None, error=None, affiliations=[], journals=[],
-                   conferences=[], aff_matches=[], rev_matches=[], existing_papers=set()),
+                   conferences=[], aff_matches=[], rev_matches=[],
+                   work_venue_matches=[], work_coauthor_matches=[],
+                   existing_papers=set()),
     )
 
 
@@ -467,6 +473,40 @@ async def orcid_import_fetch(
             "conference": [(conferences[i].id, conferences[i].name, s) for s, i in c_hits],
         })
 
+    # ── Venue matches per work ─────────────────────────────────────────────────
+    work_venue_matches = []
+    for work in record.works:
+        if work.journal_name:
+            j_hits = best_matches(work.journal_name, journal_names, threshold=0.35, top=3)
+            c_hits = best_matches(work.journal_name, conf_names, threshold=0.35, top=3)
+            work_venue_matches.append({
+                "journal": [(journals[i].id, journals[i].name, s) for s, i in j_hits],
+                "conference": [(conferences[i].id, conferences[i].name, s) for s, i in c_hits],
+                "venue_type": work_venue_type(work.work_type),
+            })
+        else:
+            work_venue_matches.append({"journal": [], "conference": [], "venue_type": "other"})
+
+    # ── Co-author matches per work ─────────────────────────────────────────────
+    all_authors = (await db.execute(
+        select(Author).order_by(Author.last_name, Author.given_name)
+    )).scalars().all()
+    author_display_names = [a.full_name for a in all_authors]
+
+    work_coauthor_matches: list[list[dict]] = []
+    for work in record.works:
+        per_work = []
+        for contrib in work.contributors:
+            # Skip if this contributor is the author being imported (matched by ORCID)
+            if contrib.orcid and contrib.orcid == record.orcid:
+                continue
+            hits = best_matches(contrib.name, author_display_names, threshold=0.55, top=3)
+            per_work.append({
+                "contrib": contrib,
+                "matches": [(all_authors[i].id, all_authors[i].full_name, s) for s, i in hits],
+            })
+        work_coauthor_matches.append(per_work)
+
     paper_rows = (await db.execute(
         select(PaperProject.title)
         .join(PaperAuthor, PaperAuthor.paper_id == PaperProject.id)
@@ -480,6 +520,8 @@ async def orcid_import_fetch(
                    record=record, error=None, affiliations=affiliations,
                    journals=journals, conferences=conferences,
                    aff_matches=aff_matches, rev_matches=rev_matches,
+                   work_venue_matches=work_venue_matches,
+                   work_coauthor_matches=work_coauthor_matches,
                    existing_papers=existing_papers),
     )
 
@@ -552,6 +594,10 @@ async def orcid_import_apply(
     )).all()
     existing_papers = {r[0].lower() for r in paper_rows}
 
+    # Track contributors by name to avoid re-creating the same Author twice
+    # if the same person appears across multiple works.
+    new_coauthor_cache: dict[str, int] = {}  # name_lower → author_id
+
     for i, work in enumerate(record.works):
         if not form.get(f"work_{i}_import"):
             continue
@@ -567,6 +613,105 @@ async def orcid_import_apply(
         await db.flush()
         db.add(PaperAuthor(paper_id=paper.id, author_id=author_id, position=1))
         existing_papers.add(work.title.lower())
+
+        # ── Venue (journal / conference) ──────────────────────────────────
+        venue_raw = (form.get(f"work_{i}_venue_id") or "skip").strip()
+        if venue_raw != "skip":
+            year = work.year or date.today().year
+            if venue_raw == "new_j":
+                j = Journal(name=work.journal_name or f"Unknown ({work.title[:40]})")
+                db.add(j)
+                await db.flush()
+                db.add(PaperJournalSubmission(
+                    paper_id=paper.id, journal_id=j.id,
+                    status=SubmissionStatus.accepted,
+                ))
+            elif venue_raw == "new_c":
+                vname = work.journal_name or f"Unknown Conference ({year})"
+                conf = Conference(name=vname, abbreviation=vname[:32])
+                db.add(conf)
+                await db.flush()
+                edition = ConferenceEdition(conference_id=conf.id, year=year)
+                db.add(edition)
+                await db.flush()
+                db.add(PaperConferenceSubmission(
+                    paper_id=paper.id, conference_edition_id=edition.id,
+                    status=SubmissionStatus.accepted,
+                ))
+            elif venue_raw.startswith("j_"):
+                try:
+                    jid = int(venue_raw[2:])
+                    db.add(PaperJournalSubmission(
+                        paper_id=paper.id, journal_id=jid,
+                        status=SubmissionStatus.accepted,
+                    ))
+                except ValueError:
+                    pass
+            elif venue_raw.startswith("c_"):
+                try:
+                    conf_id = int(venue_raw[2:])
+                    edition = (await db.execute(
+                        select(ConferenceEdition).where(
+                            ConferenceEdition.conference_id == conf_id,
+                            ConferenceEdition.year == year,
+                        )
+                    )).scalar_one_or_none()
+                    if not edition:
+                        edition = ConferenceEdition(conference_id=conf_id, year=year)
+                        db.add(edition)
+                        await db.flush()
+                    db.add(PaperConferenceSubmission(
+                        paper_id=paper.id, conference_edition_id=edition.id,
+                        status=SubmissionStatus.accepted,
+                    ))
+                except ValueError:
+                    pass
+
+        # ── Co-authors ────────────────────────────────────────────────────
+        # Filter out the main author (already added above)
+        contribs = [
+            c for c in work.contributors
+            if not (c.orcid and c.orcid == record.orcid)
+        ]
+        position = 2
+        for j, contrib in enumerate(contribs):
+            raw_val = (form.get(f"work_{i}_coauthor_{j}") or "skip").strip()
+            if raw_val == "skip":
+                continue
+            co_id: int | None = None
+            if raw_val == "new":
+                # Create a minimal Author record
+                cache_key = contrib.name.lower()
+                if cache_key in new_coauthor_cache:
+                    co_id = new_coauthor_cache[cache_key]
+                else:
+                    # Split name heuristically: "Given Family" or "Family, Given"
+                    if "," in contrib.name:
+                        parts = [p.strip() for p in contrib.name.split(",", 1)]
+                        last, given = parts[0], parts[1] if len(parts) > 1 else ""
+                    else:
+                        parts = contrib.name.rsplit(" ", 1)
+                        last = parts[-1]
+                        given = parts[0] if len(parts) > 1 else ""
+                    new_author = Author(
+                        last_name=last, given_name=given,
+                        orcid=validate_orcid(contrib.orcid) if contrib.orcid else None,
+                    )
+                    db.add(new_author)
+                    await db.flush()
+                    co_id = new_author.id
+                    new_coauthor_cache[cache_key] = co_id
+            else:
+                try:
+                    co_id = int(raw_val)
+                except ValueError:
+                    continue
+                if co_id == author_id:
+                    continue  # already added as position 1
+
+            if co_id:
+                db.add(PaperAuthor(paper_id=paper.id, author_id=co_id, position=position))
+                position += 1
 
     # ── Review Services ───────────────────────────────────────────────────
     linked_user_id = author.user.id if author.user else None

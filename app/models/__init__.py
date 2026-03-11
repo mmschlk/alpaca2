@@ -33,3 +33,9 @@ from app.models.workflow import Workflow, WorkflowShare, WorkflowStep, WorkflowT
 from app.models.personal_todo import PersonalTodo  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.bibtex import BibCollection, BibCollectionShare, BibCollectionWriteRevoke, BibEntry  # noqa: F401
+from app.models.supervision import (  # noqa: F401
+    SupervisionProject,
+    SupervisionDocument,
+    SupervisionTodo,
+    SupervisionTypeWorkflowConfig,
+)

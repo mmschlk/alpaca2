@@ -49,12 +49,20 @@ class OrcidEmployment:
 
 
 @dataclass
+class OrcidContributor:
+    name: str
+    orcid: str | None   # contributor's ORCID iD if they linked it; often None
+    sequence: str       # "first" | "additional"
+
+
+@dataclass
 class OrcidWork:
     title: str
     year: int | None
     doi: str | None
     journal_name: str | None
     work_type: str  # JOURNAL_ARTICLE, CONFERENCE_PAPER, etc.
+    contributors: list["OrcidContributor"] = field(default_factory=list)
 
 
 @dataclass
@@ -136,6 +144,9 @@ async def fetch_orcid_record(orcid: str) -> OrcidRecord:
             r = await client.get(f"{ORCID_BASE}/{orcid}/works", headers=_HEADERS)
             if r.status_code == 200:
                 seen: set[str] = set()
+                put_codes: list[int] = []
+                works_by_put_code: dict[int, OrcidWork] = {}
+
                 for grp in r.json().get("group", []):
                     summaries = grp.get("work-summary", [])
                     if not summaries:
@@ -150,13 +161,50 @@ async def fetch_orcid_record(orcid: str) -> OrcidRecord:
                         if eid.get("external-id-type") == "doi":
                             doi = eid.get("external-id-value")
                             break
-                    works.append(OrcidWork(
+                    work = OrcidWork(
                         title=title,
                         year=_year(s.get("publication-date")),
                         doi=doi,
                         journal_name=_val(s.get("journal-title")),
                         work_type=(s.get("type") or "other").upper(),
-                    ))
+                    )
+                    works.append(work)
+                    put_code = s.get("put-code")
+                    if put_code:
+                        put_codes.append(int(put_code))
+                        works_by_put_code[int(put_code)] = work
+
+                # Bulk-fetch full work details for contributors (max 100 per batch)
+                for batch_start in range(0, len(put_codes), 100):
+                    batch = put_codes[batch_start:batch_start + 100]
+                    codes_str = ",".join(str(pc) for pc in batch)
+                    r2 = await client.get(
+                        f"{ORCID_BASE}/{orcid}/works/{codes_str}", headers=_HEADERS
+                    )
+                    if r2.status_code != 200:
+                        continue
+                    for item in r2.json().get("bulk", []):
+                        wk = item.get("work")
+                        if not wk:
+                            continue
+                        pc = wk.get("put-code")
+                        if not pc or int(pc) not in works_by_put_code:
+                            continue
+                        target_work = works_by_put_code[int(pc)]
+                        for c in (wk.get("contributors") or {}).get("contributor", []):
+                            attrs = c.get("contributor-attributes") or {}
+                            role = (attrs.get("contributor-role") or "").lower()
+                            if role not in ("author", ""):
+                                continue  # skip editors, translators, etc.
+                            credit = _val(c.get("credit-name")) or ""
+                            if not credit:
+                                continue
+                            orcid_obj = c.get("contributor-orcid") or {}
+                            contrib_orcid = orcid_obj.get("path") or None
+                            seq = (attrs.get("contributor-sequence") or "additional").lower()
+                            target_work.contributors.append(OrcidContributor(
+                                name=credit, orcid=contrib_orcid, sequence=seq,
+                            ))
 
             # ── Peer reviews ──────────────────────────────────────────────────
             r = await client.get(f"{ORCID_BASE}/{orcid}/peer-reviews", headers=_HEADERS)

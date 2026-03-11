@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Thesis Supervision{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h4 class="mb-0"><i class="bi bi-mortarboard me-2"></i>Thesis Supervision</h4>
+  <div class="d-flex gap-2">
+    <a href="/supervision/settings" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-gear me-1"></i>Settings
+    </a>
+    <a href="/supervision/new" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-lg me-1"></i>New Project
+    </a>
+  </div>
+</div>
+
+{# ── Status tabs ── #}
+<ul class="nav nav-pills mb-4">
+  {% for s in statuses %}
+  <li class="nav-item">
+    <a class="nav-link {% if tab == s.value %}active{% endif %}"
+       href="/supervision?tab={{ s.value }}">
+      {{ s.value | title }}
+      {% set count = by_status[s] | length %}
+      {% if count %}
+      <span class="badge bg-secondary ms-1">{{ count }}</span>
+      {% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{# ── Project cards for active tab ── #}
+{% set active_status = namespace(val=None) %}
+{% for s in statuses %}
+  {% if s.value == tab %}{% set active_status.val = s %}{% endif %}
+{% endfor %}
+
+{% set projects = by_status[active_status.val] %}
+
+{% if projects %}
+<div class="row g-3">
+  {% for p in projects %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100 paper-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <span class="badge
+            {% if p.project_type.value == 'masters_thesis' %}bg-primary
+            {% elif p.project_type.value == 'bachelors_thesis' %}bg-info text-dark
+            {% elif p.project_type.value == 'master_project' %}bg-secondary
+            {% else %}bg-warning text-dark{% endif %}
+            small">
+            {{ project_type_labels[p.project_type] }}
+          </span>
+          {% if p.github_url %}
+          <a href="{{ p.github_url }}" target="_blank" rel="noopener"
+             class="text-muted" title="GitHub"><i class="bi bi-github"></i></a>
+          {% endif %}
+        </div>
+
+        <h6 class="card-title mb-1">
+          <a href="/supervision/{{ p.id }}" class="text-decoration-none">{{ p.title }}</a>
+        </h6>
+        {% if p.student_name %}
+        <p class="text-muted small mb-1"><i class="bi bi-person me-1"></i>{{ p.student_name }}</p>
+        {% endif %}
+
+        {% if p.start_date or p.end_date %}
+        <p class="text-muted small mb-2">
+          <i class="bi bi-calendar3 me-1"></i>
+          {{ p.start_date.strftime('%d %b %Y') if p.start_date else '?' }}
+          →
+          {{ p.end_date.strftime('%d %b %Y') if p.end_date else 'ongoing' }}
+        </p>
+        {% endif %}
+
+        {# ── Todo progress ── #}
+        {% if p.todos %}
+        {% set done = p.todos | selectattr('status', 'equalto', 'done') | list | length %}
+        {% set total = p.todos | length %}
+        <div class="mb-0">
+          <div class="d-flex justify-content-between small text-muted mb-1">
+            <span>Todos</span><span>{{ done }}/{{ total }}</span>
+          </div>
+          <div class="progress" style="height:4px">
+            <div class="progress-bar bg-success" style="width:{{ (done / total * 100) | int }}%"></div>
+          </div>
+        </div>
+        {% endif %}
+
+        {# ── Doc count ── #}
+        {% if p.documents %}
+        <p class="text-muted small mt-2 mb-0">
+          <i class="bi bi-paperclip me-1"></i>{{ p.documents | length }} file{{ 's' if p.documents | length != 1 }}
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-mortarboard display-6 d-block mb-3 opacity-25"></i>
+  <p class="mb-3">No {{ tab }} projects yet.</p>
+  <a href="/supervision/new" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>New Project
+  </a>
+</div>
+{% endif %}
+{% endblock %}

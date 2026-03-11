@@ -22,6 +22,7 @@ from app.routers import (
     service,
     suggestions,
     notebook,
+    supervision,
     wiki,
     workflows,
 )
@@ -58,6 +59,7 @@ app.include_router(scholar.router)
 app.include_router(service.router)
 app.include_router(suggestions.router)
 app.include_router(notebook.router)
+app.include_router(supervision.router)
 app.include_router(wiki.router)
 app.include_router(workflows.router)
 app.include_router(partials.router)

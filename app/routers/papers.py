@@ -524,6 +524,29 @@ async def update_status(
     return RedirectResponse(referer, 302)
 
 
+@router.post("/bulk-delete")
+async def bulk_delete_papers(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    form = await request.form()
+    raw_ids = form.getlist("paper_ids")
+    ids = [int(v) for v in raw_ids if v.isdigit()]
+    if ids:
+        vis = _visibility_filter(current_user.id, current_user.author_id)
+        papers = (await db.execute(
+            select(PaperProject).where(PaperProject.id.in_(ids)).where(vis)
+        )).scalars().all()
+        for paper in papers:
+            await db.delete(paper)
+        await db.commit()
+    redirect_to = (form.get("redirect_to") or "/papers").strip() or "/papers"
+    return RedirectResponse(redirect_to, 302)
+
+
 @router.post("/{paper_id}/delete")
 async def delete_paper(
     paper_id: int,

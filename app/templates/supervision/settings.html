@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Supervision Settings{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb small">
+      <li class="breadcrumb-item"><a href="/supervision">Supervision</a></li>
+      <li class="breadcrumb-item active">Settings</li>
+    </ol>
+  </nav>
+  <h4><i class="bi bi-gear me-2"></i>Supervision Settings</h4>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+
+    <div class="card mb-3">
+      <div class="card-header small fw-semibold">Seed Workflows per Project Type</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          When you create a new supervision project, the steps of the configured workflow
+          are automatically added as todos. You can configure a different workflow for each
+          project type, or leave it empty for no seeding.
+        </p>
+
+        {% if not workflows %}
+        <div class="alert alert-info small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          You have no workflows yet. Create one in
+          <a href="/workflows/new">Workflows</a> first, then return here to configure seeding.
+        </div>
+        {% endif %}
+
+        <form method="post" action="/supervision/settings">
+          {% for pt in project_types %}
+          {% set cfg = config_map.get(pt) %}
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">{{ project_type_labels[pt] }}</label>
+            <select name="workflow_{{ pt.value }}"
+                    class="form-select form-select-sm"
+                    {% if not workflows %}disabled{% endif %}>
+              <option value="">— none (no auto-seeding) —</option>
+              {% for wf in workflows %}
+              <option value="{{ wf.id }}"
+                {% if cfg and cfg.workflow_id == wf.id %}selected{% endif %}>
+                {{ wf.name }}
+                {% if wf.steps | length %} ({{ wf.steps | length }} steps){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endfor %}
+
+          <button type="submit" class="btn btn-primary btn-sm"
+                  {% if not workflows %}disabled{% endif %}>
+            <i class="bi bi-check-lg me-1"></i>Save Settings
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <p class="text-muted small">
+      <i class="bi bi-lightbulb me-1"></i>
+      Tip: Create a workflow named after each project type (e.g. "Master's Thesis") in
+      <a href="/workflows">Workflows</a>, add the steps that apply to all projects of that
+      type, then select it here.
+    </p>
+  </div>
+</div>
+{% endblock %}
