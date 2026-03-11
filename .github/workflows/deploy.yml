@@ -65,6 +65,8 @@ jobs:
 
             cd /opt/alpaca
 
+            git pull
+
             docker compose pull app
             docker compose up -d
 
