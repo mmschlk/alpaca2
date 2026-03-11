@@ -1,9 +1,15 @@
+from contextlib import asynccontextmanager
+
+import bcrypt
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
+from app.database import AsyncSessionLocal
+from app.models.user import User
 from app.routers import (
     admin,
     auth,
@@ -27,7 +33,31 @@ from app.routers import (
     workflows,
 )
 
-app = FastAPI(title="Alpaca", description="Academic Administration, knowLedge base, Paper organization And Collaboration Assistant")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.ADMIN_USERNAME and settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD:
+        async with AsyncSessionLocal() as db:
+            existing = (await db.execute(
+                select(User).where(User.username == settings.ADMIN_USERNAME)
+            )).scalar_one_or_none()
+            if not existing:
+                db.add(User(
+                    username=settings.ADMIN_USERNAME,
+                    email=settings.ADMIN_EMAIL,
+                    hashed_password=bcrypt.hashpw(
+                        settings.ADMIN_PASSWORD.encode(), bcrypt.gensalt()
+                    ).decode(),
+                    is_admin=True,
+                ))
+                await db.commit()
+    yield
+
+
+app = FastAPI(
+    title="Alpaca",
+    description="Academic Administration, knowLedge base, Paper organization And Collaboration Assistant",
+    lifespan=lifespan,
+)
 
 # ── Middleware ──────────────────────────────────────────────────────────────
 app.add_middleware(

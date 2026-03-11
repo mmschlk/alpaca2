@@ -8,5 +8,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me"
     DEBUG: bool = True
 
+    # Optional: seed an initial admin user on first startup
+    ADMIN_USERNAME: str | None = None
+    ADMIN_EMAIL: str | None = None
+    ADMIN_PASSWORD: str | None = None
+
 
 settings = Settings()
