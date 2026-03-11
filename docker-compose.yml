@@ -54,10 +54,7 @@ services:
 
   # ── Alpaca application ────────────────────────────────────────────────────────
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: alpaca:latest
+    image: ghcr.io/mwever/alpaca2:main
     restart: unless-stopped
     depends_on:
       db:
