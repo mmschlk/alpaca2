@@ -161,6 +161,7 @@ async def supervision_settings_form(
 
     workflows = (await db.execute(
         select(Workflow)
+        .options(selectinload(Workflow.steps))
         .where(Workflow.owner_id == current_user.id)
         .order_by(Workflow.name)
     )).scalars().all()
