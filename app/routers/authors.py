@@ -394,6 +394,51 @@ async def add_affiliation(
     return RedirectResponse(f"/authors/{author_id}", 302)
 
 
+@router.post("/{author_id}/affiliations/{aa_id}/edit")
+async def edit_affiliation(
+    author_id: int,
+    aa_id: int,
+    affiliation_id: int = Form(...),
+    start_date: str = Form(default=""),
+    end_date: str = Form(default=""),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    aa = (await db.execute(
+        select(AuthorAffiliation)
+        .where(AuthorAffiliation.id == aa_id)
+        .where(AuthorAffiliation.author_id == author_id)
+    )).scalar_one_or_none()
+    if aa:
+        aa.affiliation_id = affiliation_id
+        aa.start_date = date.fromisoformat(start_date) if start_date else None
+        aa.end_date = date.fromisoformat(end_date) if end_date else None
+        await db.commit()
+    return RedirectResponse(f"/authors/{author_id}", 302)
+
+
+@router.post("/{author_id}/affiliations/{aa_id}/delete")
+async def remove_affiliation(
+    author_id: int,
+    aa_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    aa = (await db.execute(
+        select(AuthorAffiliation)
+        .where(AuthorAffiliation.id == aa_id)
+        .where(AuthorAffiliation.author_id == author_id)
+    )).scalar_one_or_none()
+    if aa:
+        await db.delete(aa)
+        await db.commit()
+    return RedirectResponse(f"/authors/{author_id}", 302)
+
+
 # ── ORCID import ──────────────────────────────────────────────────────────────
 
 def _orcid_ctx(request, current_user, author, **kw):
