@@ -4,7 +4,7 @@ manual apply, and personal todo management.
 """
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import select, or_, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,7 +21,6 @@ from app.models.workflow import (
 from app.workflow_engine import apply_workflow_to_paper, apply_workflow_to_user
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
-templates = Jinja2Templates(directory="app/templates")
 
 PAPER_STATUS_LABELS = {
     "planned": "Planned", "wip": "Work in Progress", "submitted": "Submitted",

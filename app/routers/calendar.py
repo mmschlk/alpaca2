@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,7 +15,6 @@ from app.models.conference import ConferenceEdition
 from app.models.journal import JournalSpecialIssue
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _ctx(request, current_user, **kw):

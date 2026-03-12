@@ -6,7 +6,7 @@ import json
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,6 @@ from app.models.journal import Journal
 from app.models.suggestion import Suggestion, SuggestionType
 
 router = APIRouter(prefix="/suggest", tags=["suggestions"])
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _ctx(request, current_user, **kw):

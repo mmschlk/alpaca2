@@ -8,7 +8,7 @@ import bleach
 import markdown as md
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -27,7 +27,6 @@ from app.models.notebook import (
 from app.models.paper import PaperProject
 
 router = APIRouter(prefix="/notebook", tags=["notebook"])
-templates = Jinja2Templates(directory="app/templates")
 
 ALLOWED_TAGS = list(bleach.sanitizer.ALLOWED_TAGS) + [
     "p", "pre", "code", "h1", "h2", "h3", "h4", "h5", "ul", "ol", "li", "blockquote",

@@ -9,7 +9,7 @@ import bleach
 import markdown as md
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -20,7 +20,6 @@ from app.models.group import GroupMembership, GroupRole, ResearchGroup
 from app.models.wiki import LOCK_TTL, WikiPage, WikiPageRevision
 
 router = APIRouter(prefix="/groups", tags=["wiki"])
-templates = Jinja2Templates(directory="app/templates")
 
 ALLOWED_TAGS = list(bleach.sanitizer.ALLOWED_TAGS) + [
     "p", "pre", "code", "h1", "h2", "h3", "h4", "h5", "ul", "ol", "li", "blockquote",

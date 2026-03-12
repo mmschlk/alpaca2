@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -20,7 +20,6 @@ from app.models.paper import PaperAuthor, PaperConferenceSubmission, PaperMilest
 from app.routers.papers import _visibility_filter
 
 router = APIRouter(prefix="/partials", tags=["partials"])
-templates = Jinja2Templates(directory="app/templates")
 
 DEADLINE_WINDOW_DAYS = 90
 

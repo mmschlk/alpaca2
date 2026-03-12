@@ -9,6 +9,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.database import AsyncSessionLocal
+from app.feature_flags import KNOWN_FEATURES, populate_cache
+from app.models.feature_flag import FeatureFlag
 from app.models.user import User
 from app.routers import (
     admin,
@@ -35,8 +37,9 @@ from app.routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.ADMIN_USERNAME and settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD:
-        async with AsyncSessionLocal() as db:
+    async with AsyncSessionLocal() as db:
+        # Seed initial admin user
+        if settings.ADMIN_USERNAME and settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD:
             existing = (await db.execute(
                 select(User).where(User.username == settings.ADMIN_USERNAME)
             )).scalar_one_or_none()
@@ -50,6 +53,22 @@ async def lifespan(app: FastAPI):
                     is_admin=True,
                 ))
                 await db.commit()
+
+        # Seed known feature flags (only adds missing ones, never overwrites)
+        for key, meta in KNOWN_FEATURES.items():
+            existing_flag = await db.get(FeatureFlag, key)
+            if not existing_flag:
+                db.add(FeatureFlag(
+                    key=key,
+                    label=meta["label"],
+                    description=meta["description"],
+                    enabled=meta["default_enabled"],
+                ))
+        await db.commit()
+
+        # Populate in-memory feature flag cache
+        await populate_cache(db)
+
     yield
 
 

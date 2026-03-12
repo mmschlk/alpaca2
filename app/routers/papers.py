@@ -8,7 +8,7 @@ import markdown as md
 import bleach
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -46,7 +46,6 @@ from app.models.scholar import ScholarPaperSnapshot
 from app.models.workflow import PaperWorkflowSubscription as _PWS
 
 router = APIRouter(prefix="/papers", tags=["papers"])
-templates = Jinja2Templates(directory="app/templates")
 PAGE_SIZE = 20
 UPLOAD_DIR = "static/uploads/papers"
 

@@ -11,7 +11,7 @@ import httpx
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,6 @@ from app.models.paper import PaperAuthor, PaperProject, PaperStatus
 from app.models.scholar import ScholarAuthorSnapshot, ScholarPaperSnapshot
 
 router = APIRouter(prefix="/scholar", tags=["scholar"])
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _ctx(request, current_user, **kw):

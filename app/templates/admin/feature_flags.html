@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Feature Flags{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/admin">Admin</a></li>
+    <li class="breadcrumb-item active">Feature Flags</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-toggles me-2"></i>Feature Flags</h4>
+    <p class="text-muted small mb-0 mt-1">
+      Globally enable or disable modules. Users listed under a flag get access even when it is off.
+    </p>
+  </div>
+</div>
+
+{% for flag in flags %}
+<div class="card mb-3" id="{{ flag.key }}">
+  <div class="card-header d-flex align-items-center justify-content-between py-2">
+    <div class="d-flex align-items-center gap-3">
+      {% if flag.enabled %}
+        <span class="badge bg-success">Enabled</span>
+      {% else %}
+        <span class="badge bg-secondary">Disabled</span>
+      {% endif %}
+      <span class="fw-semibold">{{ flag.label }}</span>
+      <span class="text-muted small">{{ flag.key }}</span>
+    </div>
+    <form method="post" action="/admin/features/{{ flag.key }}/toggle" class="d-inline">
+      <button type="submit" class="btn btn-sm {% if flag.enabled %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+        {% if flag.enabled %}
+          <i class="bi bi-toggle-on me-1"></i>Disable
+        {% else %}
+          <i class="bi bi-toggle-off me-1"></i>Enable
+        {% endif %}
+      </button>
+    </form>
+  </div>
+
+  {% if flag.description %}
+  <div class="card-body py-2 border-bottom">
+    <p class="text-muted small mb-0">{{ flag.description }}</p>
+  </div>
+  {% endif %}
+
+  <div class="card-body py-2">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <span class="small fw-semibold text-muted text-uppercase">
+        <i class="bi bi-person-check me-1"></i>Beta / Individual Access
+        {% if flag.enabled %}
+          <span class="badge bg-light text-muted border ms-1" title="Feature is globally on — these users have no special effect">
+            Not needed while enabled
+          </span>
+        {% endif %}
+      </span>
+    </div>
+
+    {% if flag.user_overrides %}
+    <div class="d-flex flex-wrap gap-2 mb-2">
+      {% for access in flag.user_overrides %}
+      <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle d-flex align-items-center gap-1 pe-1 py-1">
+        <i class="bi bi-person me-1"></i>{{ access.user.username }}
+        <form method="post" action="/admin/features/{{ flag.key }}/users/{{ access.user_id }}/delete" class="d-inline ms-1">
+          <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent text-primary-emphasis lh-1" title="Remove access">
+            <i class="bi bi-x-lg" style="font-size:.65rem"></i>
+          </button>
+        </form>
+      </span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted small mb-2">No individual overrides.</p>
+    {% endif %}
+
+    <form method="post" action="/admin/features/{{ flag.key }}/users" class="d-flex gap-2 align-items-center">
+      <select name="user_id" class="form-select form-select-sm" style="max-width:220px" required>
+        <option value="">Add user…</option>
+        {% for u in users %}
+          {% set already = flag.user_overrides | selectattr("user_id", "equalto", u.id) | list %}
+          {% if not already %}
+          <option value="{{ u.id }}">{{ u.username }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-plus-lg me-1"></i>Grant Access
+      </button>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">No feature flags configured.</div>
+{% endfor %}
+{% endblock %}

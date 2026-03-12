@@ -1,7 +1,7 @@
 from datetime import date
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,7 +12,6 @@ from app.models.journal import Journal, JournalSpecialIssue
 from app.scimago import fetch_scimago
 
 router = APIRouter(prefix="/journals", tags=["journals"])
-templates = Jinja2Templates(directory="app/templates")
 PAGE_SIZE = 25
 RANKS = ["Q1", "Q2", "Q3", "Q4"]
 

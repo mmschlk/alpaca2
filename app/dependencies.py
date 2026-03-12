@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.feature_flags import user_has_feature
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -61,3 +62,11 @@ CurrentUser = Annotated[Optional[object], Depends(get_current_user)]
 RequireUser = Annotated[object, Depends(require_user)]
 RequireAdmin = Annotated[object, Depends(require_admin)]
 RequireModerator = Annotated[object, Depends(require_moderator)]
+
+
+def require_feature(key: str):
+    """Route dependency that blocks access when a feature flag is off for the user."""
+    async def _check(request: Request, user=Depends(require_user)):
+        if not user_has_feature(user.id, user.is_admin, key):
+            raise HTTPException(status_code=302, headers={"Location": "/"})
+    return Depends(_check)

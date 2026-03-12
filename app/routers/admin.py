@@ -3,14 +3,16 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import require_admin, require_moderator
+from app.feature_flags import KNOWN_FEATURES, populate_cache
 from app.models.author import Author
+from app.models.feature_flag import FeatureFlag, UserFeatureAccess
 from app.models.claim import AuthorClaimRequest, ClaimStatus
 from app.models.conference import Conference, ConferenceEdition
 from app.models.group import ResearchGroup
@@ -20,7 +22,6 @@ from app.models.suggestion import Suggestion, SuggestionStatus, SuggestionType
 from app.models.user import User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _ctx(request, current_user, **kw):
@@ -357,3 +358,77 @@ async def reject_suggestion(
         suggestion.review_note = review_note or None
         await db.commit()
     return RedirectResponse("/admin/suggestions", 302)
+
+
+# ── Feature Flags ─────────────────────────────────────────────────────────────
+
+@router.get("/features", response_class=HTMLResponse)
+async def list_features(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    flags = (await db.execute(
+        select(FeatureFlag)
+        .options(selectinload(FeatureFlag.user_overrides).selectinload(UserFeatureAccess.user))
+        .order_by(FeatureFlag.key)
+    )).scalars().all()
+    users = (await db.execute(select(User).where(User.is_active == True).order_by(User.username))).scalars().all()
+    return templates.TemplateResponse(
+        request, "admin/feature_flags.html",
+        _ctx(request, current_user, flags=flags, users=users, KNOWN_FEATURES=KNOWN_FEATURES),
+    )
+
+
+@router.post("/features/{key}/toggle")
+async def toggle_feature(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    flag = await db.get(FeatureFlag, key)
+    if flag:
+        flag.enabled = not flag.enabled
+        await db.commit()
+        await populate_cache(db)
+    return RedirectResponse("/admin/features", 302)
+
+
+@router.post("/features/{key}/users")
+async def add_feature_user(
+    key: str,
+    user_id: int = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    flag = await db.get(FeatureFlag, key)
+    if flag:
+        existing = (await db.execute(
+            select(UserFeatureAccess)
+            .where(UserFeatureAccess.feature_key == key)
+            .where(UserFeatureAccess.user_id == user_id)
+        )).scalar_one_or_none()
+        if not existing:
+            db.add(UserFeatureAccess(user_id=user_id, feature_key=key))
+            await db.commit()
+            await populate_cache(db)
+    return RedirectResponse(f"/admin/features#{key}", 302)
+
+
+@router.post("/features/{key}/users/{uid}/delete")
+async def remove_feature_user(
+    key: str,
+    uid: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    access = (await db.execute(
+        select(UserFeatureAccess)
+        .where(UserFeatureAccess.feature_key == key)
+        .where(UserFeatureAccess.user_id == uid)
+    )).scalar_one_or_none()
+    if access:
+        await db.delete(access)
+        await db.commit()
+        await populate_cache(db)
+    return RedirectResponse(f"/admin/features#{key}", 302)

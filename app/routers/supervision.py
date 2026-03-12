@@ -5,7 +5,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -27,7 +27,6 @@ from app.models.workflow import Workflow
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/supervision", tags=["supervision"])
-templates = Jinja2Templates(directory="app/templates")
 
 UPLOAD_DIR = "static/uploads/supervision"
 

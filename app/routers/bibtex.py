@@ -7,7 +7,7 @@ from io import StringIO
 
 from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -23,7 +23,6 @@ from app.models.group import GroupMembership, GroupRole, ResearchGroup
 from app.models.paper import PaperAuthor, PaperProject
 
 router = APIRouter(prefix="/bibtex", tags=["bibtex"])
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _ctx(request, current_user, **kw):

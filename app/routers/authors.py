@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -32,7 +32,6 @@ from app.dblp_client import (
 )
 
 router = APIRouter(prefix="/authors", tags=["authors"])
-templates = Jinja2Templates(directory="app/templates")
 
 PAGE_SIZE = 25
 _PHOTO_DIR = "static/uploads/author_photos"

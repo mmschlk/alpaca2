@@ -5,7 +5,7 @@ import httpx
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -55,7 +55,6 @@ async def _fetch_core_rank(abbreviation: str) -> tuple[str | None, str | None]:
     return matches[0]
 
 router = APIRouter(prefix="/conferences", tags=["conferences"])
-templates = Jinja2Templates(directory="app/templates")
 PAGE_SIZE = 25
 
 CORE_RANKS = ["A*", "A", "B", "C", "National", "Unranked"]

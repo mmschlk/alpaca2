@@ -2,7 +2,7 @@ import os
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -22,7 +22,6 @@ from app.routers.papers import _visibility_filter
 from app.workflow_engine import fire_group_join_triggers
 
 router = APIRouter(prefix="/groups", tags=["groups"])
-templates = Jinja2Templates(directory="app/templates")
 PAGE_SIZE = 25
 
 _LOGO_DIR = "static/uploads/group_logos"

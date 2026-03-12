@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,7 +16,6 @@ from app.models.claim import AuthorClaimRequest, ClaimStatus
 from app.models.user import User
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _hash_password(password: str) -> str:

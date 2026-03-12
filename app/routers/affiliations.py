@@ -2,7 +2,7 @@ import os
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,7 +12,6 @@ from app.dependencies import get_current_user
 from app.models.affiliation import Affiliation, AuthorAffiliation
 
 router = APIRouter(prefix="/affiliations", tags=["affiliations"])
-templates = Jinja2Templates(directory="app/templates")
 
 PAGE_SIZE = 25
 _LOGO_DIR = "static/uploads/affiliation_logos"
