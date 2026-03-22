@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 import bcrypt
 from fastapi import FastAPI, Request
-from fastapi.responses import Response
+from fastapi.responses import PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -122,6 +122,11 @@ app.include_router(supervision.router)
 app.include_router(wiki.router)
 app.include_router(workflows.router)
 app.include_router(partials.router)
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    return PlainTextResponse("User-agent: *\nDisallow: /\n")
 
 
 # ── Error handling helpers ───────────────────────────────────────────────────
