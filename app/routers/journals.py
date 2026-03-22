@@ -1,6 +1,6 @@
 from datetime import date
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from app.templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,8 +8,9 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app import scimago_csv
 from app.models.journal import Journal, JournalSpecialIssue
-from app.scimago import fetch_scimago
+from app.scimago import fetch_scimago, ScimagoBlockedError, ScimagoInfo
 
 router = APIRouter(prefix="/journals", tags=["journals"])
 PAGE_SIZE = 25
@@ -73,6 +74,26 @@ async def create_journal(
     db.add(journal)
     await db.commit()
     return RedirectResponse("/journals", 302)
+
+
+# ── ScimagoJR autocomplete ────────────────────────────────────────────────────
+
+@router.get("/scimago-autocomplete")
+async def scimago_autocomplete(q: str = "", current_user=Depends(get_current_user)):
+    if not current_user or not scimago_csv.is_loaded() or len(q) < 2:
+        return JSONResponse([])
+    results = scimago_csv.search(q, limit=12)
+    return JSONResponse([{
+        "source_id": e.source_id,
+        "title": e.title,
+        "issns": e.issns,
+        "sjr": e.sjr,
+        "best_quartile": e.best_quartile,
+        "h_index": e.h_index,
+        "country": e.country,
+        "publisher": e.publisher,
+        "url": e.scimago_url,
+    } for e in results])
 
 
 @router.get("/{j_id}", response_class=HTMLResponse)
@@ -158,8 +179,34 @@ async def fetch_scimago_preview(
     journal = result.scalar_one_or_none()
     if not journal or not journal.scimago_id:
         return HTMLResponse("<div class='alert alert-warning'>No ScimagoJR ID set.</div>")
+
+    # Try local CSV first (fast, no network required)
+    csv_entry = scimago_csv.lookup_by_id(journal.scimago_id)
+    if csv_entry:
+        info = ScimagoInfo(
+            title=csv_entry.title,
+            sjr=csv_entry.sjr,
+            sjr_year=None,
+            best_quartile=csv_entry.best_quartile,
+            h_index=csv_entry.h_index,
+            categories=csv_entry.categories,
+        )
+        return templates.TemplateResponse(
+            request, "journals/scimago_preview.html",
+            _ctx(request, current_user, journal=journal, info=info),
+        )
+
     try:
         info = await fetch_scimago(journal.scimago_id)
+    except ScimagoBlockedError:
+        link = f"https://www.scimagojr.com/journalsearch.php?q={journal.scimago_id}&tip=sid"
+        return HTMLResponse(
+            f"<div class='alert alert-warning'>"
+            f"<strong>ScimagoJR blocked the request.</strong> Their site prevents automated access. "
+            f"Please <a href='{link}' target='_blank' rel='noopener'>open the journal page</a> "
+            f"and enter the values manually."
+            f"</div>"
+        )
     except Exception as e:
         return HTMLResponse(f"<div class='alert alert-danger'>Error fetching ScimagoJR: {e}</div>")
     return templates.TemplateResponse(

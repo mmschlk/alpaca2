@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}ScimagoJR Data{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/admin">Admin</a></li>
+    <li class="breadcrumb-item active">ScimagoJR Data</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart me-2"></i>ScimagoJR Data</h4>
+    <p class="text-muted small mb-0 mt-1">
+      Upload the annual ScimagoJR journal rankings CSV to enable local lookups and journal autocomplete.
+    </p>
+  </div>
+</div>
+
+{% if request.query_params.get('uploaded') %}
+<div class="alert alert-success alert-dismissible">
+  <i class="bi bi-check-circle me-1"></i>
+  Successfully loaded <strong>{{ request.query_params.get('uploaded') }}</strong> journals from the CSV.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<!-- Status card -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold small"><i class="bi bi-database me-1"></i>Current Status</div>
+  <div class="card-body">
+    {% if meta.loaded_at %}
+    <div class="d-flex align-items-center gap-3">
+      <i class="bi bi-check-circle-fill text-success fs-4"></i>
+      <div>
+        <div class="fw-semibold">{{ "{:,}".format(meta.row_count) if meta.row_count else meta.row_count }} journals loaded</div>
+        <div class="text-muted small">Uploaded {{ meta.loaded_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      </div>
+    </div>
+    {% else %}
+    <div class="d-flex align-items-center gap-3">
+      <i class="bi bi-x-circle-fill text-secondary fs-4"></i>
+      <div>
+        <div class="fw-semibold text-muted">No data loaded</div>
+        <div class="text-muted small">Upload the CSV below to enable journal lookups and autocomplete.</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Upload card -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold small"><i class="bi bi-upload me-1"></i>Upload CSV</div>
+  <div class="card-body">
+    <form method="post" action="/admin/scimago/upload" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">ScimagoJR CSV file</label>
+        <input class="form-control" type="file" name="file" accept=".csv" required>
+        <div class="form-text">
+          The file must be the semicolon-delimited CSV exported from ScimagoJR.
+          Uploading replaces the current data immediately.
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-upload me-1"></i>Upload and load
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Instructions card -->
+<div class="card">
+  <div class="card-header fw-semibold small"><i class="bi bi-info-circle me-1"></i>How to download the CSV</div>
+  <div class="card-body">
+    <ol class="small mb-0">
+      <li class="mb-1">
+        Go to
+        <a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">
+          scimagojr.com/journalrank.php
+        </a>.
+      </li>
+      <li class="mb-1">
+        Scroll to the bottom of the table and click <strong>Download data</strong>.
+        This downloads the full list of ~25 000 journals as a <code>.csv</code> file.
+      </li>
+      <li>Upload the file here. The data is reloaded instantly — no restart needed.</li>
+    </ol>
+  </div>
+</div>
+{% endblock %}

@@ -1,7 +1,7 @@
 import bcrypt
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from app.templating import templates
 from sqlalchemy import func, select
@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.dependencies import require_admin, require_moderator
 from app.feature_flags import KNOWN_FEATURES, populate_cache
+from app import scimago_csv
 from app.models.author import Author
 from app.models.error_log import ErrorLog
 from app.models.feature_flag import FeatureFlag, UserFeatureAccess
@@ -486,3 +487,28 @@ async def clear_errors(
     await db.execute(delete(ErrorLog))
     await db.commit()
     return RedirectResponse("/admin/errors", 302)
+
+
+# ── ScimagoJR CSV ─────────────────────────────────────────────────────────────
+
+@router.get("/scimago", response_class=HTMLResponse)
+async def scimago_admin(
+    request: Request,
+    current_user=Depends(require_admin),
+):
+    return templates.TemplateResponse(
+        request, "admin/scimago.html",
+        _ctx(request, current_user, meta=scimago_csv.get_meta()),
+    )
+
+
+@router.post("/scimago/upload")
+async def upload_scimago_csv(
+    file: UploadFile = File(...),
+    current_user=Depends(require_admin),
+):
+    contents = await file.read()
+    scimago_csv.CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    scimago_csv.CSV_PATH.write_bytes(contents)
+    count = scimago_csv.load()
+    return RedirectResponse(f"/admin/scimago?uploaded={count}", 302)

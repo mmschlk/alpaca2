@@ -29,7 +29,7 @@
 
     {% if info.categories %}
     <div class="mb-3">
-      <div class="small fw-semibold text-muted mb-1">Quartile by Category ({{ info.sjr_year }})</div>
+      <div class="small fw-semibold text-muted mb-1">Quartile by Category{% if info.sjr_year %} ({{ info.sjr_year }}){% endif %}</div>
       <div class="d-flex flex-wrap gap-1">
         {% for cat, q in info.categories %}
         <span class="badge {% if q == 'Q1' %}bg-success{% elif q == 'Q2' %}bg-primary{% elif q == 'Q3' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">

@@ -13,6 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.feature_flags import KNOWN_FEATURES, populate_cache
+from app import scimago_csv
 from app.models.error_log import ErrorLog
 from app.models.feature_flag import FeatureFlag
 from app.models.user import User
@@ -74,6 +75,9 @@ async def lifespan(app: FastAPI):
 
         # Populate in-memory feature flag cache
         await populate_cache(db)
+
+    # Load ScimagoJR CSV if it has been uploaded previously
+    scimago_csv.load()
 
     yield
 

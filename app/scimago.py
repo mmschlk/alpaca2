@@ -12,9 +12,13 @@ from bs4 import BeautifulSoup, Tag
 _BASE = "https://www.scimagojr.com"
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "X-Requested-With": "XMLHttpRequest",
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
     "Referer": _BASE + "/",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
 }
 _TIMEOUT = 20.0
 _QUARTILE_ORDER = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
@@ -58,13 +62,19 @@ def _table_rows(soup: BeautifulSoup, header: str) -> list[list[str]]:
     return []
 
 
+class ScimagoBlockedError(Exception):
+    """Raised when ScimagoJR blocks the request (bot protection)."""
+
+
 async def fetch_scimago(scimago_id: str) -> ScimagoInfo:
     """Fetch and parse ScimagoJR data for the given source ID."""
-    url = f"{_BASE}/journalsearch.php?q={scimago_id}&tip=sid&out=json"
+    url = f"{_BASE}/journalsearch.php?q={scimago_id}&tip=sid"
     async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
         # Warm up session to get cookies
         await client.get(_BASE + "/", headers={"User-Agent": _HEADERS["User-Agent"]})
         resp = await client.get(url, headers=_HEADERS)
+        if resp.status_code == 403:
+            raise ScimagoBlockedError(scimago_id)
         resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")

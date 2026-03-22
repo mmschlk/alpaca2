@@ -11,10 +11,13 @@
   <div class="card-body">
     <h5 class="fw-bold mb-4">{{ 'Edit Journal' if journal else 'New Journal' }}</h5>
     <form method="post" action="{{ action }}">
-      <div class="mb-3">
+      <div class="mb-3 position-relative">
         <label class="form-label small fw-semibold">Name *</label>
-        <input type="text" name="name" class="form-control" required
+        <input type="text" name="name" id="journal-name" class="form-control" required
+               autocomplete="off"
                value="{{ journal.name if journal else '' }}">
+        <ul id="journal-autocomplete" class="list-group position-absolute w-100 shadow-sm"
+            style="z-index:1000;display:none;max-height:260px;overflow-y:auto;top:100%"></ul>
       </div>
       <div class="row g-3">
         <div class="col-md-5">
@@ -54,4 +57,61 @@
     </form>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+{% if not journal %}
+<script>
+(function () {
+  const nameInput = document.getElementById('journal-name');
+  const dropdown  = document.getElementById('journal-autocomplete');
+  let debounce;
+
+  const QUARTILE_COLOR = {Q1:'success', Q2:'primary', Q3:'warning', Q4:'secondary'};
+
+  function fillForm(entry) {
+    nameInput.value = entry.title;
+    const f = nameInput.closest('form');
+    f.querySelector('[name=scimago_id]').value = entry.source_id || '';
+    if (entry.sjr)
+      f.querySelector('[name=impact_factor]').value = entry.sjr;
+    if (entry.best_quartile)
+      f.querySelector('[name=rank]').value = entry.best_quartile;
+    dropdown.style.display = 'none';
+  }
+
+  function renderDropdown(results) {
+    dropdown.innerHTML = '';
+    if (!results.length) { dropdown.style.display = 'none'; return; }
+    results.forEach(e => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item list-group-item-action py-2 px-3 small';
+      li.style.cursor = 'pointer';
+      const color = QUARTILE_COLOR[e.best_quartile] || 'secondary';
+      const badge = e.best_quartile
+        ? `<span class="badge bg-${color} ms-1">${e.best_quartile}</span>` : '';
+      const sub = [e.country, e.publisher].filter(Boolean).join(' · ');
+      li.innerHTML = `<div class="fw-semibold">${e.title}${badge}</div>`
+        + (sub ? `<div class="text-muted" style="font-size:0.75rem">${sub}</div>` : '');
+      li.addEventListener('mousedown', ev => { ev.preventDefault(); fillForm(e); });
+      dropdown.appendChild(li);
+    });
+    dropdown.style.display = 'block';
+  }
+
+  nameInput.addEventListener('input', () => {
+    clearTimeout(debounce);
+    const q = nameInput.value.trim();
+    if (q.length < 2) { dropdown.style.display = 'none'; return; }
+    debounce = setTimeout(() => {
+      fetch('/journals/scimago-autocomplete?q=' + encodeURIComponent(q))
+        .then(r => r.json()).then(renderDropdown).catch(() => {});
+    }, 220);
+  });
+
+  nameInput.addEventListener('blur', () => {
+    setTimeout(() => { dropdown.style.display = 'none'; }, 150);
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
