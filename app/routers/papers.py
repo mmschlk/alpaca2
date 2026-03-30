@@ -38,6 +38,7 @@ from app.models.paper import (
     PaperResource,
     PaperResourceType,
     PaperStatus,
+    PaperSubmissionPlan,
     SubmissionStatus,
     TodoItem,
     TodoStatus,
@@ -300,6 +301,10 @@ async def paper_detail(
             selectinload(PaperProject.change_log).selectinload(PaperChangeLog.journal),
             selectinload(PaperProject.change_log).selectinload(PaperChangeLog.special_issue),
             selectinload(PaperProject.change_log).selectinload(PaperChangeLog.resource),
+            selectinload(PaperProject.submission_plans).selectinload(PaperSubmissionPlan.edition)
+            .selectinload(ConferenceEdition.conference),
+            selectinload(PaperProject.submission_plans).selectinload(PaperSubmissionPlan.journal),
+            selectinload(PaperProject.submission_plans).selectinload(PaperSubmissionPlan.special_issue),
         )
         .where(
             (PaperProject.id == paper_id) &
@@ -922,5 +927,48 @@ async def delete_conf_submission(
     sub = result.scalar_one_or_none()
     if sub:
         await db.delete(sub)
+        await db.commit()
+    return RedirectResponse(f"/papers/{paper_id}?tab=timeline", 302)
+
+
+@router.post("/{paper_id}/plans/add")
+async def add_submission_plan(
+    paper_id: int,
+    conference_edition_id: Optional[int] = Form(default=None),
+    journal_id: Optional[int] = Form(default=None),
+    journal_special_issue_id: Optional[int] = Form(default=None),
+    notes: str = Form(default=""),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    plan = PaperSubmissionPlan(
+        paper_id=paper_id,
+        conference_edition_id=conference_edition_id or None,
+        journal_id=journal_id or None,
+        journal_special_issue_id=journal_special_issue_id or None,
+        notes=notes.strip() or None,
+    )
+    db.add(plan)
+    await db.commit()
+    return RedirectResponse(f"/papers/{paper_id}?tab=timeline", 302)
+
+
+@router.post("/{paper_id}/plans/{plan_id}/delete")
+async def delete_submission_plan(
+    paper_id: int, plan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not current_user:
+        return RedirectResponse("/login", 302)
+    plan = (await db.execute(
+        select(PaperSubmissionPlan)
+        .where(PaperSubmissionPlan.id == plan_id)
+        .where(PaperSubmissionPlan.paper_id == paper_id)
+    )).scalar_one_or_none()
+    if plan:
+        await db.delete(plan)
         await db.commit()
     return RedirectResponse(f"/papers/{paper_id}?tab=timeline", 302)

@@ -14,6 +14,7 @@ from app.models.paper import (  # noqa: F401
     PaperMilestone,
     PaperProject,
     PaperResource,
+    PaperSubmissionPlan,
     TodoItem,
 )
 from app.models.calendar import PersonalCalendarEvent  # noqa: F401

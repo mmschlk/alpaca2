@@ -596,6 +596,76 @@
           </div>
         </div>
 
+        <!-- Planned submissions -->
+        <div class="card mb-3">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-semibold small"><i class="bi bi-megaphone me-1"></i>Planned Submissions</span>
+            <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="collapse" data-bs-target="#planSubForm">
+              <i class="bi bi-plus"></i>
+            </button>
+          </div>
+          {% if paper.submission_plans %}
+          <ul class="list-group list-group-flush">
+            {% for plan in paper.submission_plans %}
+            <li class="list-group-item small d-flex justify-content-between align-items-start gap-2 py-2">
+              <div>
+                {% if plan.edition %}
+                <i class="bi bi-calendar-event me-1 text-muted"></i>
+                <a href="/conferences/{{ plan.edition.conference.id }}" class="text-decoration-none fw-semibold">{{ plan.edition.conference.abbreviation }} {{ plan.edition.year }}</a>
+                {% if plan.edition.full_paper_deadline %}
+                <span class="text-muted ms-1" style="font-size:.75rem">
+                  deadline {{ plan.edition.full_paper_deadline.strftime('%b %-d, %Y') }}
+                </span>
+                {% endif %}
+                {% elif plan.journal %}
+                <i class="bi bi-journal me-1 text-muted"></i>
+                <a href="/journals/{{ plan.journal.id }}" class="text-decoration-none fw-semibold">{{ plan.journal.name }}</a>
+                {% if plan.special_issue %}
+                <span class="text-muted ms-1" style="font-size:.75rem">— {{ plan.special_issue.title }}</span>
+                {% endif %}
+                {% endif %}
+                {% if plan.notes %}
+                <div class="text-muted mt-1" style="font-size:.75rem">{{ plan.notes }}</div>
+                {% endif %}
+              </div>
+              <form method="post" action="/papers/{{ paper.id }}/plans/{{ plan.id }}/delete" class="d-flex mb-0"
+                    onsubmit="return confirm('Remove this plan?')">
+                <button class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-x"></i></button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          <div class="collapse" id="planSubForm">
+            <div class="card-body border-top">
+              <form method="post" action="/papers/{{ paper.id }}/plans/add">
+                <div class="mb-2">
+                  <label class="form-label small fw-semibold mb-1">Conference edition</label>
+                  <select name="conference_edition_id" class="form-select form-select-sm">
+                    <option value="">— none —</option>
+                    {% for ed in editions %}
+                    <option value="{{ ed.id }}">{{ ed.conference.abbreviation }} {{ ed.year }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small fw-semibold mb-1">— or journal —</label>
+                  <select name="journal_id" class="form-select form-select-sm">
+                    <option value="">— none —</option>
+                    {% for j in journals %}
+                    <option value="{{ j.id }}">{{ j.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="mb-2">
+                  <input type="text" name="notes" class="form-control form-control-sm" placeholder="Notes (optional)">
+                </div>
+                <button class="btn btn-sm btn-primary w-100">Add Plan</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div><!-- /pane-timeline -->

@@ -113,16 +113,47 @@
       </div>
       <div class="card-body p-2">
         {% for aa in author.author_affiliations %}
-        <div class="small d-flex justify-content-between align-items-center py-1 px-2 rounded
-                    {% if not aa.end_date %}bg-light{% endif %}">
-          <div>
-            {% if aa.affiliation.color %}
-            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ aa.affiliation.color }}" class="me-1"></span>
-            {% endif %}
-            <a href="/affiliations/{{ aa.affiliation.id }}" class="text-decoration-none">{{ aa.affiliation.name }}</a>
-            {% if not aa.end_date %}<span class="badge bg-success ms-1" style="font-size:.65rem">current</span>{% endif %}
+        <div class="small py-1 px-2 rounded {% if not aa.end_date %}bg-light{% endif %}">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              {% if aa.affiliation.color %}
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ aa.affiliation.color }}" class="me-1"></span>
+              {% endif %}
+              <a href="/affiliations/{{ aa.affiliation.id }}" class="text-decoration-none">{{ aa.affiliation.name }}</a>
+              {% if not aa.end_date %}<span class="badge bg-success ms-1" style="font-size:.65rem">current</span>{% endif %}
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              <span class="text-muted">{{ aa.start_date.year if aa.start_date else '?' }}–{{ aa.end_date.year if aa.end_date else 'now' }}</span>
+              <button class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:.7rem;line-height:1.4"
+                      data-bs-toggle="collapse" data-bs-target="#editAff{{ aa.id }}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <form method="post" action="/authors/{{ author.id }}/affiliations/{{ aa.id }}/delete" class="d-flex mb-0"
+                    onsubmit="return confirm('Remove this affiliation?')">
+                <button class="btn btn-xs btn-outline-danger py-0 px-1" style="font-size:.7rem;line-height:1.4">
+                  <i class="bi bi-x"></i>
+                </button>
+              </form>
+            </div>
           </div>
-          <div class="text-muted">{{ aa.start_date.year if aa.start_date else '?' }}–{{ aa.end_date.year if aa.end_date else 'now' }}</div>
+          <div class="collapse mt-1" id="editAff{{ aa.id }}">
+            <form method="post" action="/authors/{{ author.id }}/affiliations/{{ aa.id }}/edit">
+              <div class="mb-1">
+                <select name="affiliation_id" class="form-select form-select-sm" required>
+                  {% for aff in affiliations %}
+                  <option value="{{ aff.id }}" {% if aff.id == aa.affiliation_id %}selected{% endif %}>{{ aff.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="row g-1 mb-1">
+                <div class="col"><input type="date" name="start_date" class="form-control form-control-sm"
+                       value="{{ aa.start_date.isoformat() if aa.start_date else '' }}"></div>
+                <div class="col"><input type="date" name="end_date" class="form-control form-control-sm"
+                       value="{{ aa.end_date.isoformat() if aa.end_date else '' }}" placeholder="blank = current"></div>
+              </div>
+              <button class="btn btn-sm btn-primary w-100">Save</button>
+            </form>
+          </div>
         </div>
         {% else %}
         <div class="text-muted small p-2">No affiliations.</div>

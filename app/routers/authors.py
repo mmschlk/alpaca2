@@ -191,6 +191,10 @@ async def author_detail(
     if not author:
         return RedirectResponse("/authors", 302)
 
+    author.author_affiliations.sort(
+        key=lambda aa: (aa.end_date is not None, -(aa.start_date.toordinal() if aa.start_date else 0))
+    )
+
     # Latest scholar snapshot
     snap_result = await db.execute(
         select(ScholarAuthorSnapshot)

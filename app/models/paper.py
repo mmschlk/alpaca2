@@ -134,6 +134,10 @@ class PaperProject(Base):
     workflow_subscriptions: Mapped[list["PaperWorkflowSubscription"]] = relationship(
         "PaperWorkflowSubscription", back_populates="paper", cascade="all, delete-orphan"
     )
+    submission_plans: Mapped[list["PaperSubmissionPlan"]] = relationship(
+        "PaperSubmissionPlan", back_populates="paper", cascade="all, delete-orphan",
+        order_by="PaperSubmissionPlan.created_at",
+    )
 
 
 class PaperAuthor(Base):
@@ -189,6 +193,30 @@ class PaperJournalSubmission(Base):
     special_issue: Mapped[Optional["JournalSpecialIssue"]] = relationship(
         "JournalSpecialIssue", back_populates="paper_submissions"
     )
+
+
+class PaperSubmissionPlan(Base):
+    """Records intent to submit a paper to a conference edition or journal (pre-submission planning)."""
+    __tablename__ = "paper_submission_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("paper_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    conference_edition_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("conference_editions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    journal_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("journals.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    journal_special_issue_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("journal_special_issues.id", ondelete="SET NULL"), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    paper: Mapped["PaperProject"] = relationship("PaperProject", back_populates="submission_plans")
+    edition: Mapped[Optional["ConferenceEdition"]] = relationship("ConferenceEdition", back_populates="submission_plans")
+    journal: Mapped[Optional["Journal"]] = relationship("Journal", back_populates="submission_plans")
+    special_issue: Mapped[Optional["JournalSpecialIssue"]] = relationship("JournalSpecialIssue", back_populates="submission_plans")
 
 
 class PaperGroupShare(Base):

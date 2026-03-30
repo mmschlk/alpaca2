@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Planned Submissions{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-megaphone me-2"></i>Planned Submissions</h4>
+</div>
+
+{% if not forthcoming_editions and not special_issues_with_plans and not journals_with_plans %}
+<div class="text-muted p-3">
+  No planned submissions yet. Tag paper projects for upcoming calls from each paper's <strong>Timeline</strong> tab.
+</div>
+{% endif %}
+
+<!-- ── Forthcoming conference calls ── -->
+{% if forthcoming_editions %}
+<h5 class="fw-semibold mb-3"><i class="bi bi-calendar-event me-1"></i>Forthcoming Conference Calls</h5>
+{% for grp in forthcoming_editions %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <a href="/conferences/{{ grp.edition.conference.id }}" class="fw-semibold text-decoration-none">{{ grp.edition.conference.name }}</a>
+      <span class="text-muted ms-2">{{ grp.edition.conference.abbreviation }} {{ grp.edition.year }}</span>
+      {% if grp.edition.conference.core_rank %}<span class="badge bg-secondary ms-1">{{ grp.edition.conference.core_rank }}</span>{% endif %}
+    </div>
+    <div class="text-end small">
+      {% if grp.edition.abstract_deadline %}
+      <span class="me-3 {% if grp.edition.abstract_deadline < today %}text-danger{% else %}text-muted{% endif %}">
+        <i class="bi bi-file-text me-1"></i>Abstract: {{ grp.edition.abstract_deadline.strftime('%b %-d, %Y') }}
+      </span>
+      {% endif %}
+      {% if grp.edition.full_paper_deadline %}
+      <span class="{% if grp.edition.full_paper_deadline < today %}text-danger{% else %}text-muted{% endif %}">
+        <i class="bi bi-file-earmark-text me-1"></i>Full paper: {{ grp.edition.full_paper_deadline.strftime('%b %-d, %Y') }}
+      </span>
+      {% endif %}
+      {% if grp.edition.notification_date %}
+      <span class="ms-3 text-muted">
+        <i class="bi bi-bell me-1"></i>Notification: {{ grp.edition.notification_date.strftime('%b %-d, %Y') }}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for plan in grp.plans %}
+    <li class="list-group-item small d-flex justify-content-between align-items-start py-2">
+      <div>
+        <a href="/papers/{{ plan.paper.id }}" class="text-decoration-none fw-semibold">{{ plan.paper.title }}</a>
+        {% if plan.paper.paper_authors %}
+        <div class="text-muted mt-1" style="font-size:.78rem">
+          {% for pa in plan.paper.paper_authors %}{{ pa.author.full_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% if plan.notes %}<div class="text-muted fst-italic mt-1" style="font-size:.75rem">{{ plan.notes }}</div>{% endif %}
+      </div>
+      <span class="badge bg-{{ plan.paper.status.value | replace('_','-') }} ms-2 text-nowrap"
+            style="font-size:.7rem">{{ plan.paper.status.value | replace('_',' ') | title }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- ── Journal special issues ── -->
+{% if special_issues_with_plans %}
+<h5 class="fw-semibold mb-3 mt-4"><i class="bi bi-journal-bookmark me-1"></i>Special Issues</h5>
+{% for grp in special_issues_with_plans %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <a href="/journals/{{ grp.special_issue.journal.id }}" class="fw-semibold text-decoration-none">{{ grp.special_issue.journal.name }}</a>
+      <span class="text-muted ms-2">— {{ grp.special_issue.title }}</span>
+    </div>
+    {% if grp.special_issue.submission_deadline %}
+    <span class="small {% if grp.special_issue.submission_deadline < today %}text-danger{% else %}text-muted{% endif %}">
+      <i class="bi bi-calendar3 me-1"></i>Deadline: {{ grp.special_issue.submission_deadline.strftime('%b %-d, %Y') }}
+    </span>
+    {% endif %}
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for plan in grp.plans %}
+    <li class="list-group-item small d-flex justify-content-between align-items-start py-2">
+      <div>
+        <a href="/papers/{{ plan.paper.id }}" class="text-decoration-none fw-semibold">{{ plan.paper.title }}</a>
+        {% if plan.paper.paper_authors %}
+        <div class="text-muted mt-1" style="font-size:.78rem">
+          {% for pa in plan.paper.paper_authors %}{{ pa.author.full_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% if plan.notes %}<div class="text-muted fst-italic mt-1" style="font-size:.75rem">{{ plan.notes }}</div>{% endif %}
+      </div>
+      <span class="badge bg-{{ plan.paper.status.value | replace('_','-') }} ms-2 text-nowrap"
+            style="font-size:.7rem">{{ plan.paper.status.value | replace('_',' ') | title }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- ── Journals ── -->
+{% if journals_with_plans %}
+<h5 class="fw-semibold mb-3 mt-4"><i class="bi bi-journal me-1"></i>Journals</h5>
+{% for grp in journals_with_plans %}
+<div class="card mb-3">
+  <div class="card-header">
+    <a href="/journals/{{ grp.journal.id }}" class="fw-semibold text-decoration-none">{{ grp.journal.name }}</a>
+    {% if grp.journal.rank %}<span class="badge bg-secondary ms-1">{{ grp.journal.rank }}</span>{% endif %}
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for plan in grp.plans %}
+    <li class="list-group-item small d-flex justify-content-between align-items-start py-2">
+      <div>
+        <a href="/papers/{{ plan.paper.id }}" class="text-decoration-none fw-semibold">{{ plan.paper.title }}</a>
+        {% if plan.paper.paper_authors %}
+        <div class="text-muted mt-1" style="font-size:.78rem">
+          {% for pa in plan.paper.paper_authors %}{{ pa.author.full_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% if plan.notes %}<div class="text-muted fst-italic mt-1" style="font-size:.75rem">{{ plan.notes }}</div>{% endif %}
+      </div>
+      <span class="badge bg-{{ plan.paper.status.value | replace('_','-') }} ms-2 text-nowrap"
+            style="font-size:.7rem">{{ plan.paper.status.value | replace('_',' ') | title }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- ── Past conference calls ── -->
+{% if past_editions %}
+<details class="mt-4">
+  <summary class="fw-semibold text-muted small mb-3" style="cursor:pointer">
+    <i class="bi bi-archive me-1"></i>Past calls with planned submissions ({{ past_editions | length }})
+  </summary>
+  {% for grp in past_editions %}
+  <div class="card mb-2">
+    <div class="card-header small d-flex justify-content-between align-items-center">
+      <a href="/conferences/{{ grp.edition.conference.id }}" class="text-decoration-none text-muted">
+        {{ grp.edition.conference.abbreviation }} {{ grp.edition.year }}
+      </a>
+      {% if grp.edition.full_paper_deadline %}
+      <span class="text-muted">{{ grp.edition.full_paper_deadline.strftime('%b %-d, %Y') }}</span>
+      {% endif %}
+    </div>
+    <ul class="list-group list-group-flush">
+      {% for plan in grp.plans %}
+      <li class="list-group-item small py-1">
+        <a href="/papers/{{ plan.paper.id }}" class="text-decoration-none">{{ plan.paper.title }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+
+{% endblock %}

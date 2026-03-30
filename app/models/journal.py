@@ -26,6 +26,9 @@ class Journal(Base):
     paper_submissions: Mapped[list["PaperJournalSubmission"]] = relationship(
         "PaperJournalSubmission", back_populates="journal"
     )
+    submission_plans: Mapped[list["PaperSubmissionPlan"]] = relationship(
+        "PaperSubmissionPlan", back_populates="journal"
+    )
 
 
 class JournalSpecialIssue(Base):
@@ -44,4 +47,7 @@ class JournalSpecialIssue(Base):
     journal: Mapped["Journal"] = relationship("Journal", back_populates="special_issues")
     paper_submissions: Mapped[list["PaperJournalSubmission"]] = relationship(
         "PaperJournalSubmission", back_populates="special_issue"
+    )
+    submission_plans: Mapped[list["PaperSubmissionPlan"]] = relationship(
+        "PaperSubmissionPlan", back_populates="special_issue"
     )

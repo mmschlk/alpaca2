@@ -24,6 +24,7 @@ from app.routers import (
     affiliations,
     bibtex,
     calendar,
+    calls,
     collaborators,
     conferences,
     dashboard,
@@ -108,6 +109,7 @@ app.include_router(bibtex.router)
 app.include_router(calendar.router)
 app.include_router(dashboard.router)
 app.include_router(papers.router)
+app.include_router(calls.router)
 app.include_router(conferences.router)
 app.include_router(journals.router)
 app.include_router(authors.router)

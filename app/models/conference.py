@@ -55,6 +55,9 @@ class ConferenceEdition(Base):
     paper_submissions: Mapped[list["PaperConferenceSubmission"]] = relationship(
         "PaperConferenceSubmission", back_populates="edition"
     )
+    submission_plans: Mapped[list["PaperSubmissionPlan"]] = relationship(
+        "PaperSubmissionPlan", back_populates="edition"
+    )
 
     @property
     def label(self) -> str:
